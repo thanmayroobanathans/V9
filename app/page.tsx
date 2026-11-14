@@ -40,7 +40,7 @@ function useLocal<T>(key: string, init: T): [T, (v: T | ((x: T) => T)) => void] 
   return [v, set]
 }
 // Profiles calibrated before the Kalman engine (no `certainty`) recalibrate once so everyone is scored the same way.
-const isReady = (p: Person | null): p is Person => !!p && !!p.username && !!p.vector?.length && p.age >= 18 && !!p.gender && Array.isArray(p.openTo) && typeof p.certainty === 'number'
+const isReady = (p: Person | null): p is Person => !!p && !!p.username && !!p.vector?.length && p.age >= 18 && Array.isArray(p.openTo) && typeof p.certainty === 'number'
 
 export default function Page() {
   const [user, setUser] = useState<User | null>(null)
@@ -149,7 +149,7 @@ export default function Page() {
 
   // ---------- profile ----------
   const blankDraft = useMemo<Draft>(() => ({
-    uid: user?.uid ?? '', username: normaliseUsername((user?.email ?? '').split('@')[0]).replace(/^[._]+/, ''), name: user?.displayName?.split(' ')[0] ?? '', age: 0, gender: 'woman', seeking: 'men', intent: 'open', program: '', year: '2nd year', bio: '', status: '',
+    uid: user?.uid ?? '', username: normaliseUsername((user?.email ?? '').split('@')[0]).replace(/^[._]+/, ''), name: user?.displayName?.split(' ')[0] ?? '', age: 0, intent: 'open', program: '', year: '2nd year', bio: '', status: '',
     interests: [], openTo: [], prompts: [], photoURL: user?.photoURL ?? null, hue: 210, nature: null, area: null, activeAt: 0, visible: true,
     ...(partial ? Object.fromEntries(Object.entries(partial).filter(([k, v]) => v !== undefined && v !== null && v !== '' && !['loc', 'locAt', 'placeId'].includes(k))) : {}),
   } as Draft), [user, partial])

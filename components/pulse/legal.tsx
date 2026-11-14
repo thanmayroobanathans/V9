@@ -88,7 +88,7 @@ function Privacy() {
     <h4>1. Data we collect</h4>
     <ul>
       <li><b>Account:</b> your name, @{ALLOWED_DOMAIN} email address and Google account ID (from Google Sign-In).</li>
-      <li><b>Profile:</b> username, photo, age, gender, who you want to see, intent, program, year, bio, status, interests, prompts and the posts you create.</li>
+      <li><b>Profile:</b> username, photo, age, what you are looking for, program, year, bio, interests and the posts you create.</li>
       <li><b>Personality quiz:</b> your answers are turned into trait scores and a personality type.</li>
       <li><b>Activity:</b> likes, passes, follow requests, matches, post likes, messages and reports.</li>
       <li><b>Location (optional, only if you turn it on):</b> processed on your device to learn lifestyle patterns such as &ldquo;night owl&rdquo;. Only these patterns and a rough area code (about 1 km) are stored. Your exact location is never stored or shown.</li>

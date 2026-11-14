@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Camera, Check, ChevronDown, MapPin } from 'lucide-react'
-import { INTENT_LABEL, INTERESTS, USERNAME_RE, normaliseUsername, usernameOwner, type Gender, type Intent, type Person, type Seeking } from '@/lib/social'
+import { INTENT_LABEL, INTERESTS, USERNAME_RE, normaliseUsername, usernameOwner, type Intent, type Person } from '@/lib/social'
 import { FEATURES, QUESTIONS } from '@/lib/pulse-model'
 import { AXES, typeInfo, type Jung } from '@/lib/jung'
 import { Avatar, Chips, Segmented } from './ui'
@@ -55,8 +55,6 @@ export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onD
 
       {step === 1 && <>
         <h2 className="step-title">About you</h2>
-        <div className="field">I am<Segmented<Gender> value={d.gender} onChange={v => set('gender', v)} options={[{ v: 'woman', label: 'Woman' }, { v: 'man', label: 'Man' }, { v: 'nonbinary', label: 'Non-binary' }]} /></div>
-        <div className="field">Show me<Segmented<Seeking> value={d.seeking} onChange={v => set('seeking', v)} options={[{ v: 'women', label: 'Women' }, { v: 'men', label: 'Men' }, { v: 'everyone', label: 'Everyone' }]} /></div>
         <div className="field">Looking for<Segmented<Intent> value={d.intent} onChange={v => set('intent', v)} options={(Object.keys(INTENT_LABEL) as Intent[]).map(v => ({ v, label: INTENT_LABEL[v] }))} /></div>
         <label className="field">Bio<textarea value={d.bio} maxLength={150} rows={3} placeholder="Write something about yourself" onChange={e => set('bio', e.target.value)} /><small>{d.bio.length}/150</small></label>
         <div className="field">Interests <small>pick 3–6</small><Chips items={INTERESTS} active={d.interests} onToggle={toggle} max={6} /></div>

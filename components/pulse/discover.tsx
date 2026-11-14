@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { Compass, Heart, Info, RefreshCw, SlidersHorizontal, Star, X } from 'lucide-react'
-import { INTENT_LABEL, genderMatches, isActive, type Intent, type Person, type Swipe } from '@/lib/social'
+import { INTENT_LABEL, isActive, type Intent, type Person, type Swipe } from '@/lib/social'
 import { fit, fitLabel, jungOf, quizTaken, type Fit } from '@/lib/match'
 import { natureTags } from '@/lib/nature'
 import type { LearnerState } from '@/lib/learner'
@@ -17,7 +17,7 @@ export function Discover({ me, candidates, taste, onSwipe, loading }: {
   const [filters, setFilters] = useState<Filters>({ min: 18, max: 30, intent: 'any' })
   const [showFilters, setShowFilters] = useState(false)
   const deck = useMemo(() => candidates
-    .filter(p => genderMatches(me, p) && p.age >= filters.min && p.age <= filters.max && (filters.intent === 'any' || p.intent === filters.intent))
+    .filter(p => p.age >= filters.min && p.age <= filters.max && (filters.intent === 'any' || p.intent === filters.intent))
     .map(p => ({ p, f: fit(me, p, taste) }))
     // Best match first; people active in the last day get a small nudge up the deck.
     .sort((a, b) => (b.f.score + (isActive(b.p) ? 2 : 0)) - (a.f.score + (isActive(a.p) ? 2 : 0))), [candidates, me, filters, taste])

@@ -23,8 +23,9 @@ export type Person = {
   username: string
   name: string
   age: number
-  gender: Gender
-  seeking: Seeking
+  /** No longer asked; kept optional only so older profiles still load. */
+  gender?: Gender
+  seeking?: Seeking
   intent: Intent
   program: string
   year: string
@@ -57,14 +58,10 @@ export type Message = { id: string; senderUid: string; text: string; at: number;
 export const INTERESTS = ['Coding', 'Hackathons', 'Music', 'Gym', 'Badminton', 'Cricket', 'Football', 'Photography', 'Anime', 'Movies', 'Gaming', 'Reading', 'Startups', 'Dance', 'Travel', 'Cooking', 'Chai', 'Coffee', 'Art', 'Poetry', 'Debate', 'Robotics', 'Fashion', 'Night walks', 'K-drama', 'Podcasts', 'Volunteering', 'Riviera']
 export const OPEN_TO = ['Study buddy', 'Food runs', 'Sports', 'Project team', 'Exploring campus', 'Just chatting', 'Jam session', 'Gaming']
 export const PROMPTS = ['A perfect Sunday on campus looks like…', 'My most irrational fear is…', 'The way to win me over is…', 'I geek out on…', 'Green flags I look for…', 'We will get along if…', 'My go-to Foodys order is…', 'Two truths and a lie…']
-export const INTENT_LABEL: Record<Intent, string> = { 'long-term': 'Something long-term', casual: 'Something casual', friends: 'New friends', open: 'Open to see' }
+export const INTENT_LABEL: Record<Intent, string> = { friends: 'New friends', casual: 'Hang out', 'long-term': 'Something more', open: 'Open to anything' }
 
 export const ACTIVE_MS = 30 * 60 * 1000
 export const isActive = (p: Pick<Person, 'activeAt'>) => !!p.activeAt && Date.now() - p.activeAt < ACTIVE_MS
-export function genderMatches(me: Pick<Person, 'seeking' | 'gender'>, other: Pick<Person, 'seeking' | 'gender'>) {
-  const wants = (s: Seeking, g: Gender) => s === 'everyone' || (s === 'women' && g === 'woman') || (s === 'men' && g === 'man')
-  return wants(me.seeking, other.gender) && wants(other.seeking, me.gender)
-}
 
 // ---------------------------------------------------------------------------
 // Firestore
