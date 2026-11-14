@@ -5,26 +5,27 @@ import { Compass, Heart, Info, RefreshCw, SlidersHorizontal, Star, X } from 'luc
 import { INTENT_LABEL, genderMatches, isActive, type Intent, type Person, type Swipe } from '@/lib/social'
 import { fit, fitLabel, jungOf, type Fit } from '@/lib/match'
 import { natureTags } from '@/lib/nature'
+import type { LearnerState } from '@/lib/learner'
 import { typeInfo } from '@/lib/jung'
 import { Chips, Portrait, Ring } from './ui'
 
 type Filters = { min: number; max: number; intent: Intent | 'any' }
 
-export function Discover({ me, candidates, onSwipe, loading, note }: {
-  me: Person; candidates: Person[]; onSwipe: (p: Person, k: Swipe) => void; loading: boolean; note?: string
+export function Discover({ me, candidates, taste, onSwipe, loading }: {
+  me: Person; candidates: Person[]; taste: LearnerState | null; onSwipe: (p: Person, k: Swipe) => void; loading: boolean
 }) {
   const [filters, setFilters] = useState<Filters>({ min: 18, max: 30, intent: 'any' })
   const [showFilters, setShowFilters] = useState(false)
   const deck = useMemo(() => candidates
     .filter(p => genderMatches(me, p) && p.age >= filters.min && p.age <= filters.max && (filters.intent === 'any' || p.intent === filters.intent))
-    .map(p => ({ p, f: fit(me, p) }))
+    .map(p => ({ p, f: fit(me, p, taste) }))
     // Best match first; people active in the last day get a small nudge up the deck.
-    .sort((a, b) => (b.f.score + (isActive(b.p) ? 2 : 0)) - (a.f.score + (isActive(a.p) ? 2 : 0))), [candidates, me, filters])
+    .sort((a, b) => (b.f.score + (isActive(b.p) ? 2 : 0)) - (a.f.score + (isActive(a.p) ? 2 : 0))), [candidates, me, filters, taste])
 
   return (
     <section className="discover">
       <div className="discover-head">
-        <div><span className="panel-kicker">SWIPE</span><h2>Today&apos;s <em>picks</em></h2></div>
+        <div><h2>Today&apos;s <em>picks</em></h2></div>
         <button className="icon-button" aria-label="Filters" onClick={() => setShowFilters(s => !s)}><SlidersHorizontal size={18} /></button>
       </div>
       {showFilters && (
@@ -43,11 +44,10 @@ export function Discover({ me, candidates, onSwipe, loading, note }: {
           </label>
         </div>
       )}
-      {note && <p className="sample-note">{note}</p>}
       <div className="deck">
-        {loading && <div className="empty-state"><RefreshCw size={22} className="spin" /><b>Finding people on your wavelength…</b></div>}
+        {loading && <div className="empty-state"><RefreshCw size={22} className="spin" /><b>Loading…</b></div>}
         {!loading && !deck.length && (
-          <div className="empty-state"><Compass size={22} /><b>You&apos;re all caught up</b><span>No one new fits your filters right now. Widen them, or check back later — new students join every day.</span></div>
+          <div className="empty-state"><Compass size={22} /><b>You&apos;re all caught up</b><span>Check back later.</span></div>
         )}
         {!loading && deck.slice(0, 3).reverse().map(({ p, f }, i, arr) => (
           <SwipeCard key={p.uid} me={me} p={p} f={f} depth={arr.length - 1 - i} onSwipe={k => onSwipe(p, k)} />
@@ -126,8 +126,8 @@ export function ProfileDetail({ me, p, f }: { me: Person; p: Person; f: Fit }) {
     {p.status && <div className="status-bubble">“{p.status}”</div>}
     {p.bio && <p>{p.bio}</p>}
     {p.prompts?.filter(pr => pr.a).map(pr => <div className="prompt-card" key={pr.q}><small>{pr.q}</small><b>{pr.a}</b></div>)}
-    <h4>Why you might click · {fitLabel(f.score)}</h4>
-    <ul className="why">{f.reasons.length ? f.reasons.map(r => <li key={r}>{r}.</li>) : <li>Different styles — could be a fun conversation.</li>}</ul>
+    <h4>{fitLabel(f.score)}</h4>
+    {f.reasons.length > 0 && <ul className="why">{f.reasons.slice(0, 3).map(r => <li key={r}>{r}</li>)}</ul>}
     <h4>Open to</h4><Chips items={p.openTo ?? []} active={(p.openTo ?? []).filter(o => me.openTo?.includes(o))} />
     <h4>Interests{common.length ? ` · ${common.length} in common` : ''}</h4><Chips items={p.interests} active={common} />
   </>

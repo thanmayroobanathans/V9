@@ -20,9 +20,8 @@ export function Inbox({ me, matches, people, lastRead, onOpen }: {
   const convos = open.filter(m => m.lastMessage)
   return (
     <section className="matches">
-      <span className="panel-kicker">MATCHES</span>
       <h2>Your <em>matches</em></h2>
-      {!open.length && <div className="empty-state"><Heart size={22} /><b>No matches yet</b><span>Swipe right on people you like. When they like you back, you&apos;ll match and can chat here.</span></div>}
+      {!open.length && <div className="empty-state"><Heart size={22} /><b>No matches yet</b><span>Keep swiping.</span></div>}
       {fresh.length > 0 && <>
         <h4>New matches</h4>
         <div className="new-matches">{fresh.map(m => { const o = m.members[otherOf(m, me.uid)]; return <button key={m.id} onClick={() => onOpen(m.id)}><Avatar name={o?.name} photoURL={o?.photoURL} hue={o?.hue ?? 0} size={64} ring /><span>{o?.name}</span></button> })}</div>
@@ -79,10 +78,9 @@ export function MatchModal({ me, other, onChat, onClose }: { me: Person; other: 
   return (
     <div className="modal" role="dialog" aria-label="It's a match">
       <div className="modal-inner">
-        <span className="panel-kicker">MUTUAL LIKE</span>
-        <h2>It&apos;s a <em>match</em></h2>
+                <h2>It&apos;s a <em>match</em></h2>
         <div className="match-avatars"><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={96} ring /><Heart className="beat" size={28} /><Avatar name={other.name} photoURL={other.photoURL} hue={other.hue} size={96} ring /></div>
-        <p className="muted">You and {other.name} liked each other · {fit(me, other).score}% match</p>
+        <p className="muted">You and {other.name} liked each other</p>
         <button className="primary-button" onClick={onChat}><MessageCircle size={16} /> Send a message</button>
         <button className="ghost-button" onClick={onClose}>Keep swiping</button>
       </div>

@@ -2,13 +2,14 @@ import { compatibility, sharedTraits } from './pulse-model'
 import { jungFit, jungFromVector, type Jung } from './jung'
 import { adjustVector, areaAffinity, natureTags } from './nature'
 import type { Person } from './social'
+import { features, learnedPoints, type LearnerState } from './learner'
 
 /**
  * Match score.
  *
  * The core is the ORIGINAL V7 compatibility algorithm (`compatibility` in pulse-model: a blend of
  * variance-weighted Euclidean similarity and cosine similarity over the 11 traits) — unchanged.
- * Its inputs now come from the Turing-machine Kalman filter over the 36 answers (trait-kalman.ts).
+ * Its inputs now come from the Kalman filter over the 36 answers (trait-kalman.ts).
  *
  * What V9 adds on top is better input and context:
  *  1. Behaviour-adjusted vectors — each person's 11 traits are refined by lifestyle signals
@@ -19,6 +20,8 @@ import type { Person } from './social'
  *       common ground    shared interests and activities
  *       intent           looking for the same kind of connection
  *       Jung fit         background personality-type fit
+ *  3. A learned taste adjustment from each person's own swipes and chats (learner.ts) —
+ *     a Kalman filter whose influence grows as it becomes confident.
  *     Every signal is optional; missing data simply contributes nothing.
  *
  * People only ever see the final % and friendly reasons — none of the maths.
@@ -32,7 +35,7 @@ const jaccard = (a: string[] = [], b: string[] = []) => {
   return inter / (A.size + b.length - inter)
 }
 
-export function fit(me: Person, other: Person): Fit {
+export function fit(me: Person, other: Person, taste?: LearnerState | null): Fit {
   const va = adjustVector(me.vector, me.nature), vb = adjustVector(other.vector, other.nature)
   // Original algorithm on Kalman-estimated traits, then calibrated to a stable display scale
   // (typical pair ≈ 70 %, top 10 % ≈ 85 %+). Monotonic, so the ranking is untouched.
@@ -71,7 +74,11 @@ export function fit(me: Person, other: Person): Fit {
   // 5. Background Jung fit.
   adj += (jungFit(jungOf(me), jungOf(other)) - 0.65) * 10
 
-  const score = Math.round(Math.max(30, Math.min(99, base + Math.max(-12, Math.min(12, adj)))))
+  // 6. Taste learned from this person's own swipes and chats (grows with use).
+  const learned = taste ? learnedPoints(taste, features(me, other)) : 0
+  if (learned > 4) reasons.unshift('Your type')
+
+  const score = Math.round(Math.max(30, Math.min(99, base + Math.max(-12, Math.min(12, adj)) + learned)))
   return { score, base, reasons }
 }
 

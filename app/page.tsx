@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { onAuthStateChanged, type User } from 'firebase/auth'
-import { ArrowRight, Flame, Heart, LockKeyhole, LogOut, MessageSquare, Pencil, RefreshCw, Settings, Sparkles, UserRound } from 'lucide-react'
+import { ArrowRight, Flame, LogOut, MessageSquare, Pencil, RefreshCw, Settings, UserRound, X } from 'lucide-react'
 import { auth, firebaseConfigured, signInWithGoogle, signOut } from '@/lib/firebase'
 import { classify } from '@/lib/pulse-model'
 import { estimateTraits } from '@/lib/trait-kalman'
@@ -11,8 +11,9 @@ import { fit, jungOf } from '@/lib/match'
 import { GeoKalman } from '@/lib/kalman'
 import { areaCode, clearTrack, computeNature, natureTags, record } from '@/lib/nature'
 import { saveProfile, saveResult } from '@/lib/firestore'
+import { SIGNAL, features, newLearner, pack, unpack, update, type LearnerState } from '@/lib/learner'
 import {
-  INTENT_LABEL, PROMPTS, loadMySwipes, loadPerson, pairId, savePerson, sendMessage, swipe, unmatch, updateSignals,
+  INTENT_LABEL, PROMPTS, loadMySwipes, loadPerson, loadTaste, saveTaste, pairId, savePerson, sendMessage, swipe, unmatch, updateSignals,
   watchMatches, watchMessages, watchPeople, type Match, type Message, type Person, type Swipe,
 } from '@/lib/social'
 import { samplePeople, sampleReply } from '@/lib/samples'
@@ -48,6 +49,8 @@ export default function Page() {
   const [toast, setToast] = useState<{ text: string; matchId?: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState<'profile' | 'quiz' | null>(null)
+  const [agreed, setAgreed] = useState(false)
+  const [showTerms, setShowTerms] = useState(false)
   const uid = user?.uid ?? 'anon'
 
   // ---------- background location → lifestyle signals ----------
@@ -70,6 +73,10 @@ export default function Page() {
   const [msgCount, setMsgCount] = useState(PAGE)
   const [hasMore, setHasMore] = useState(false)
   const [lastRead, setLastRead] = useLocal<Record<string, number>>(`pulse93.read.${uid}`, {})
+  // Taste learner (Kalman filter over this person's swipes and chats).
+  const [taste, setTaste] = useState<LearnerState | null>(null)
+  const [chatted, setChatted] = useLocal<string[]>(`pulse95.chatted.${uid}`, [])
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const seenAt = useRef<Record<string, number> | null>(null)
 
   // ---------- sample preview (local only) ----------
@@ -149,13 +156,13 @@ export default function Page() {
     finally { setSaving(false) }
   }
   async function finishBuild(d: Draft, answers?: number[]) {
-    // The Turing machine: a full-covariance Kalman filter reads the 36 answers into 11 traits.
+    // A full-covariance Kalman filter reads the 36 answers into 11 traits.
     const est = answers ? estimateTraits(answers) : null
     const vector = est ? est.vector : (me?.vector ?? d.vector ?? [])
     const jung = answers ? jungFromAnswers(answers) : (me ? jungOf(me) : d.jung!)
     const c = classify(vector).primary
     const p: Person = { ...d, uid: user!.uid, vector, jung, archetype: c.name, archetypeCode: c.code,
-      certainty: est ? est.certainty : (me?.certainty ?? d.certainty), consistency: est ? est.consistency : (me?.consistency ?? d.consistency), nature: me?.nature ?? d.nature ?? null, area: me?.area ?? d.area ?? null, activeAt: Date.now() }
+      certainty: est ? est.certainty : (me?.certainty ?? d.certainty), nature: me?.nature ?? d.nature ?? null, area: me?.area ?? d.area ?? null, activeAt: Date.now() }
     setMe(p); setEditing(null)
     if (stage === 'build') setStage('reveal')
     else if (answers) setTab('profile')
@@ -166,6 +173,7 @@ export default function Page() {
   // ---------- realtime subscriptions ----------
   useEffect(() => {
     if (stage !== 'app' || !user) return
+    loadTaste(user.uid).then(x => setTaste(unpack(x) ?? newLearner())).catch(() => setTaste(newLearner()))
     loadMySwipes(user.uid).then(ids => setSwiped(new Set(ids))).catch(() => {})
     const subs = [
       watchPeople(p => { setPeople(p); setPeopleLoaded(true) }, e => { setPeopleLoaded(true); setError(`People unavailable — ${e.message}`) }),
@@ -211,8 +219,18 @@ export default function Page() {
   }, [chatId, msgCount, !!active, active?.sample]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- actions ----------
+  function learn(other: Person | undefined, y: number) {
+    if (!me || !other) return
+    setTaste(t => {
+      const next = update(t ?? newLearner(), features(me, other), y)
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      saveTimer.current = setTimeout(() => { saveTaste(me.uid, pack(next)).catch(() => {}) }, 3000)
+      return next
+    })
+  }
   async function handleSwipe(p: Person, kind: Swipe) {
     if (!me) return
+    learn(p, SIGNAL[kind])
     if (p.sample) {
       setSampleSwiped(s => [...s, p.uid])
       if (kind !== 'pass' && (kind === 'super' || fit(me, p).score >= 66)) {
@@ -229,6 +247,7 @@ export default function Page() {
   function openChat(id: string) { setTab('matches'); setEditing(null); setChatId(id); setToast(null) }
   async function handleSend(text: string) {
     if (!active || !me) return
+    if (!chatted.includes(active.id)) { setChatted(c => [...c, active.id]); learn(byUid[otherOf(active, me.uid)], SIGNAL.chat) }
     if (active.sample) {
       const id = active.id, them = otherOf(active, me.uid), now = Date.now()
       setSampleMsgs(x => ({ ...x, [id]: [...(x[id] ?? []), { id: `${now}`, senderUid: me.uid, text, at: now }] }))
@@ -244,31 +263,28 @@ export default function Page() {
       <div className="gate-glow" />
       <div className="gate-inner">
         <div className="eyebrow"><span className="status-dot" /> VIT PULSE / V9</div>
-        <h1>Swipe less.<br /><em>Click more.</em></h1>
-        <p className="muted">Swipe through VIT students picked for you by a personality quiz and your daily rhythm. Match when you both like each other, then chat.</p>
-        <div className="gate-points"><span><Sparkles size={14} /> Picks explained in plain words</span><span><Heart size={14} /> Chat opens on a mutual like</span><span><LockKeyhole size={14} /> Your location is never shown to anyone</span></div>
-        <button className="primary-button wide" onClick={login}><LockKeyhole size={16} /> Continue with Google <ArrowRight size={16} /></button>
+        <h1>Swipe.<br /><em>Match. Chat.</em></h1>
+        <p className="muted">Meet VIT students who fit you.</p>
+        <label className="agree"><input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} /><span>I&apos;m 18+ and agree to the <button type="button" className="link-button inline" onClick={() => setShowTerms(true)}>Terms &amp; Privacy Policy</button></span></label>
+        <button className="primary-button wide" disabled={!agreed} onClick={login}>Continue with Google <ArrowRight size={16} /></button>
         {!firebaseConfigured && <p className="config-note">Firebase configuration required.</p>}
         {error && <p className="error">{error}</p>}
-        <div className="gate-footer"><span>18+ · VIT students</span><span>V9.3</span></div>
       </div>
+      {showTerms && <Terms onClose={() => setShowTerms(false)} />}
     </main>
   )
-  if (stage === 'loading') return <main className="gate"><div className="gate-inner center"><RefreshCw className="spin" /><p className="muted">Loading your profile…</p></div></main>
+  if (stage === 'loading') return <main className="gate"><div className="gate-inner center"><RefreshCw className="spin" /><p className="muted">Loading…</p></div></main>
   if (stage === 'build') return <main className="solo">{error && <p className="error banner" onClick={() => setError('')}>{error}</p>}<ProfileBuilder initial={blankDraft} mode="onboard" locationOn={geo === 'on' || geo === 'asking'} requestLocation={() => setWantLocation(true)} onDone={finishBuild} saving={saving} /></main>
   if (stage === 'reveal' && me) return (
     <main className="solo"><section className="builder">
-      <span className="panel-kicker">MACHINE HALTED <span>36 / 36</span></span><h2>Meet <em>you</em></h2>
+      <h2>Meet <em>you</em></h2>
       <TypeCard jung={me.jung} />
-      <Readout me={me} />
-      <p className="muted">Pulse uses this, your interests{wantLocation ? ' and your daily rhythm' : ''} to rank people you&apos;re likely to click with. Every card tells you why.</p>
       <button className="primary-button wide" onClick={() => { setStage('app'); setTab('swipe') }}>Start swiping <ArrowRight size={16} /></button>
     </section></main>
   )
   if (!me) return null
 
   const go = (t: Tab) => { setTab(t); setEditing(null); setChatId(null) }
-  const sampleNote = realOthers.length === 0 && useSamples ? 'No other students have joined yet — showing SAMPLE people so you can try swiping and chatting. They are fictional and stay on this device.' : undefined
   const other = active ? byUid[otherOf(active, me.uid)] : undefined
   const myTags = natureTags(me.nature)
 
@@ -279,28 +295,28 @@ export default function Page() {
         <aside className="sidebar">
           <div className="subject-chip"><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={36} /><div><b>{me.name}</b><small>{typeInfo(jungOf(me)).emoji} {typeInfo(jungOf(me)).name}</small></div></div>
           <nav>{nav.map(({ id, label, icon: Icon }) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => go(id)}><Icon size={17} />{label}{id === 'matches' && unreadCount > 0 && <i className="badge">{unreadCount}</i>}</button>)}</nav>
-          <div className="sidebar-foot">{geo === 'on' ? 'LIFESTYLE MATCHING ON' : 'LIFESTYLE MATCHING OFF'}<br />V9.3</div>
+          <div className="sidebar-foot">V9.5</div>
         </aside>
         <main className="content">
           {error && <p className="error banner" onClick={() => setError('')} title="Dismiss">{error}</p>}
           {editing === 'profile' && <ProfileBuilder initial={me} mode="edit" locationOn={geo === 'on'} requestLocation={() => setWantLocation(true)} onDone={d => finishBuild(d)} onCancel={() => setEditing(null)} saving={saving} />}
           {editing === 'quiz' && <QuizIntro onBack={() => setEditing(null)} onDone={a => finishBuild(me, a)} />}
 
-          {!editing && tab === 'swipe' && <Discover me={me} candidates={candidates} onSwipe={handleSwipe} loading={!peopleLoaded} note={sampleNote} />}
+          {!editing && tab === 'swipe' && <Discover me={me} candidates={candidates} taste={taste} onSwipe={handleSwipe} loading={!peopleLoaded} />}
 
           {!editing && tab === 'matches' && (active
             ? <ChatView meUid={me.uid} messages={active.sample ? sampleMsgs[active.id] ?? [] : messages} hasMore={!active.sample && hasMore} onLoadMore={() => setMsgCount(c => c + PAGE)} onSend={handleSend} onBack={() => setChatId(null)}
                 placeholder={`Message ${active.members[otherOf(active, me.uid)]?.name ?? ''}`}
-                header={(() => { const o = active.members[otherOf(active, me.uid)]; return <><Avatar name={o?.name} photoURL={o?.photoURL} hue={o?.hue ?? 0} size={38} /><button className="chat-title" onClick={() => other && setViewing(other)}><b>{o?.name}</b><small>{other ? `${other.program} · ${other.year}` : 'Matched'}{active.sample ? ' · SAMPLE' : ''} · view profile</small></button>{other && <Ring value={fit(me, other).score} size={40} />}</> })()}
-                banner={<div className="chat-id-banner subtle"><span>Only you two can see this chat</span><button className="ghost-button" onClick={async () => { if (active.sample) setSampleMatches(ms => ms.filter(m => m.id !== active.id)); else await unmatch(active.id).catch(() => {}); setChatId(null) }}>Unmatch</button></div>}
-                footer={active.status === 'closed' ? <div className="composer closed">This conversation was closed.</div> : undefined}
-                empty={<><b>You matched with {active.members[otherOf(active, me.uid)]?.name}</b><span className="muted">Pulse picked these openers from what you have in common:</span></>}
+                header={(() => { const o = active.members[otherOf(active, me.uid)]; return <><Avatar name={o?.name} photoURL={o?.photoURL} hue={o?.hue ?? 0} size={38} /><button className="chat-title" onClick={() => other && setViewing(other)}><b>{o?.name}</b><small>{other ? `${other.program} · ${other.year}` : 'Matched'}{active.sample ? ' · SAMPLE' : ''}</small></button>{other && <Ring value={fit(me, other, taste).score} size={40} />}</> })()}
+                banner={<div className="chat-id-banner subtle"><span /><button className="ghost-button" onClick={async () => { if (active.sample) setSampleMatches(ms => ms.filter(m => m.id !== active.id)); else await unmatch(active.id).catch(() => {}); setChatId(null) }}>Unmatch</button></div>}
+                footer={active.status === 'closed' ? <div className="composer closed">Chat closed</div> : undefined}
+                empty={<><b>You matched with {active.members[otherOf(active, me.uid)]?.name}</b><span className="muted">Say hi 👋</span></>}
                 starters={matchStarters(me, other)} />
             : <Inbox me={me} matches={allMatches} people={byUid} lastRead={lastRead} onOpen={openChat} />)}
 
           {!editing && tab === 'profile' && (
             <section className="profile-view">
-              <div className="discover-head"><div><span className="panel-kicker">YOUR PROFILE</span><h2>How others <em>see you</em></h2></div><button className="secondary-button" onClick={() => setEditing('profile')}><Pencil size={14} /> Edit</button></div>
+              <div className="discover-head"><div><h2>Your <em>profile</em></h2></div><button className="secondary-button" onClick={() => setEditing('profile')}><Pencil size={14} /> Edit</button></div>
               <div className="sheet inline">
                 <div className="sheet-head"><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={72} ring /><div><h3>{me.name}, {me.age}</h3><span>{me.program} · {me.year}</span></div></div>
                 <span className="tag">{INTENT_LABEL[me.intent] ?? 'Open to see'}</span>{myTags.map(t => <span key={t} className="tag soft"> {t}</span>)}
@@ -310,22 +326,21 @@ export default function Page() {
                 <h4>Open to</h4><Chips items={me.openTo} />
                 <h4>Interests</h4><Chips items={me.interests} />
               </div>
-              <h4>Personality <button className="link-button" onClick={() => setEditing('quiz')}>Retake quiz</button></h4>
+              <h4>Personality <button className="link-button" onClick={() => setEditing('quiz')}>Retake</button></h4>
               <TypeCard jung={jungOf(me)} />
-              <Readout me={me} />
-              {wantLocation && <p className="muted small">{myTags.length ? `From your daily rhythm: ${myTags.join(' · ')}.` : 'Pulse is still learning your daily rhythm — this takes a few days of normal use.'}</p>}
-              <TraitDetails vector={me.vector} code={typeInfo(jungOf(me)).code} />
+                      <TraitDetails vector={me.vector} code={typeInfo(jungOf(me)).code} />
             </section>
           )}
 
           {!editing && tab === 'settings' && (
             <section className="panel">
-              <span className="panel-kicker">SETTINGS</span><h2>Privacy &amp; <em>account</em></h2>
-              <div className="setting"><div><b>Lifestyle matching</b><span>{geo === 'denied' ? 'Your browser blocked location. Allow it in site settings, then turn this on again.' : 'Uses your location in the background to learn your daily rhythm for better matches. Your location is never shown or shared — only lifestyle hints like “night owl”.'}</span></div><button className={`toggle${wantLocation ? ' on' : ''}`} onClick={() => { const v = !wantLocation; setWantLocation(v); if (!v) { clearTrack(); updateSignals(me.uid, null, null).catch(() => {}); setMe({ ...me, nature: null, area: null }) } }} aria-pressed={wantLocation}><i /></button></div>
-              <div className="setting"><div><b>Show me in Swipe</b><span>Turn off to pause. Your matches and chats stay open.</span></div><button className={`toggle${me.visible ? ' on' : ''}`} onClick={() => updateMe({ visible: !me.visible })} aria-pressed={me.visible}><i /></button></div>
-              <div className="setting"><div><b>Sample people</b><span>Fictional previews while campus is quiet. Never stored in Firestore.</span></div><button className={`toggle${useSamples ? ' on' : ''}`} onClick={() => setUseSamples(!useSamples)} aria-pressed={useSamples}><i /></button></div>
-              <div className="setting"><div><b>Reset sample data</b><span>Clears sample swipes, matches and chats on this device.</span></div><button className="secondary-button" onClick={() => { setSampleSwiped([]); setSampleMatches([]); setSampleMsgs({}) }}>Reset</button></div>
-              <div className="setting"><div><b>Sign out</b><span>Your profile stays saved to your Google account.</span></div><button className="secondary-button" onClick={() => signOut()}><LogOut size={14} /> Sign out</button></div>
+              <h2><em>Settings</em></h2>
+              <div className="setting"><div><b>Location</b><span>{geo === 'denied' ? 'Blocked in browser settings' : 'Improves matches. Never shown.'}</span></div><button className={`toggle${wantLocation ? ' on' : ''}`} onClick={() => { const v = !wantLocation; setWantLocation(v); if (!v) { clearTrack(); updateSignals(me.uid, null, null).catch(() => {}); setMe({ ...me, nature: null, area: null }) } }} aria-pressed={wantLocation}><i /></button></div>
+              <div className="setting"><div><b>Show me</b><span>Off pauses your profile</span></div><button className={`toggle${me.visible ? ' on' : ''}`} onClick={() => updateMe({ visible: !me.visible })} aria-pressed={me.visible}><i /></button></div>
+              <div className="setting"><div><b>Sample profiles</b><span>Demo profiles</span></div><button className={`toggle${useSamples ? ' on' : ''}`} onClick={() => setUseSamples(!useSamples)} aria-pressed={useSamples}><i /></button></div>
+              <div className="setting"><div><b>Reset demo</b><span /></div><button className="secondary-button" onClick={() => { setSampleSwiped([]); setSampleMatches([]); setSampleMsgs({}) }}>Reset</button></div>
+              <div className="setting"><div><b>Terms &amp; Privacy</b><span /></div><button className="secondary-button" onClick={() => setShowTerms(true)}>View</button></div>
+              <div className="setting"><div><b>Sign out</b><span /></div><button className="secondary-button" onClick={() => signOut()}><LogOut size={14} /> Sign out</button></div>
             </section>
           )}
         </main>
@@ -334,25 +349,41 @@ export default function Page() {
         <div className="sheet-backdrop" onClick={() => setViewing(null)}>
           <div className="sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label={viewing.name}>
             <button className="close-detail" onClick={() => setViewing(null)} aria-label="Close">✕</button>
-            <ProfileDetail me={me} p={viewing} f={fit(me, viewing)} />
+            <ProfileDetail me={me} p={viewing} f={fit(me, viewing, taste)} />
           </div>
         </div>
       )}
       {celebrate && <MatchModal me={me} other={celebrate.other} onClose={() => setCelebrate(null)} onChat={() => { openChat(celebrate.matchId); setCelebrate(null) }} />}
+      {showTerms && <Terms onClose={() => setShowTerms(false)} />}
       {toast && <button className="toast" onClick={() => toast.matchId && openChat(toast.matchId)}>💬 {toast.text}</button>}
     </div>
   )
 }
 
-/** Plain-language summary of what the machine learned (no maths on screen). */
-function Readout({ me }: { me: Person }) {
-  if (me.certainty === undefined && me.consistency === undefined) return null
-  const cert = Math.round((me.certainty ?? 0) * 100), cons = me.consistency ?? 1
+
+function Terms({ onClose }: { onClose: () => void }) {
   return (
-    <div className="readout">
-      <div><small>MACHINE CERTAINTY</small><b>{cert}%</b></div>
-      <div><small>ANSWER CONSISTENCY</small><b>{cons >= 0.7 ? 'High' : cons >= 0.4 ? 'Medium' : 'Low'}</b></div>
-      {cons < 0.4 && <p className="muted small">Some answers pulled in different directions. Matches still work — retaking the calibration later will sharpen them.</p>}
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet terms" onClick={e => e.stopPropagation()} role="dialog" aria-label="Terms and Privacy Policy">
+        <button className="close-detail" onClick={onClose} aria-label="Close"><X size={18} /></button>
+        <h3>Terms &amp; Privacy</h3>
+        <h4>Using VIT Pulse</h4>
+        <ul>
+          <li>You must be 18 or older and a VIT student.</li>
+          <li>Be respectful. Harassment, hate speech, spam and fake profiles are not allowed and may lead to removal.</li>
+          <li>Matches and personality results are for fun and guidance only.</li>
+          <li>Profiles marked SAMPLE are fictional demo profiles.</li>
+        </ul>
+        <h4>Your data</h4>
+        <ul>
+          <li>We store your profile, quiz results, swipes, matches and messages in Google Firebase.</li>
+          <li>Other students see only your public profile. Your email is never shown.</li>
+          <li>If you turn on location, it is processed on your device to learn lifestyle patterns (like “night owl”). Your location is never shown to anyone, and no coordinates are stored.</li>
+          <li>Your swipes are used to personalise who you see.</li>
+          <li>You can hide your profile, turn off location, or sign out at any time in Settings.</li>
+        </ul>
+        <button className="primary-button wide" onClick={onClose}>Close</button>
+      </div>
     </div>
   )
 }

@@ -1,11 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useState } from 'react'
 import { ArrowLeft, ArrowRight, Camera, ChevronDown, MapPin, Sparkles } from 'lucide-react'
 import { INTENT_LABEL, INTERESTS, OPEN_TO, PROMPTS, type Gender, type Intent, type Person, type PromptAnswer, type Seeking } from '@/lib/social'
 import { FEATURES, QUESTIONS } from '@/lib/pulse-model'
 import { AXES, typeInfo, type Jung } from '@/lib/jung'
-import { TraitKalman } from '@/lib/trait-kalman'
 import { Chips, Portrait, Segmented } from './ui'
 
 export type Draft = Omit<Person, 'vector' | 'archetype' | 'archetypeCode' | 'jung'> & { vector?: number[]; jung?: Jung }
@@ -20,7 +19,7 @@ export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onD
   const [d, setD] = useState<Draft>(initial)
   const [step, setStep] = useState(0)
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD(x => ({ ...x, [k]: v }))
-  const steps = mode === 'onboard' ? ['Basics', 'About', 'Prompts', 'Lifestyle', 'Quiz'] : ['Basics', 'About', 'Prompts', 'Lifestyle']
+  const steps = mode === 'onboard' ? ['You', 'Card', 'Prompts', 'Location', 'Quiz'] : ['You', 'Card', 'Prompts', 'Location']
   const valid = [
     d.name.trim().length > 0 && d.age >= 18 && d.age <= 40 && d.program.trim().length > 0,
     d.interests.length >= 3 && d.openTo.length >= 1,
@@ -37,13 +36,12 @@ export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onD
     <section className="builder">
       <div className="steps">{steps.map((s, i) => <span key={s} className={i <= step ? 'on' : ''}>{s}</span>)}</div>
       {step === 0 && <>
-        <h2>Let&apos;s set up <em>your profile</em></h2>
-        <p className="muted">This is what other VIT students see on your card. You can change it any time.</p>
+        <h2>About <em>you</em></h2>
         <div className="field-row">
           <label className="field">First name<input value={d.name} maxLength={24} onChange={e => set('name', e.target.value)} /></label>
           <label className="field small">Age<input type="number" inputMode="numeric" min={18} max={40} value={d.age || ''} onChange={e => set('age', Number(e.target.value))} /></label>
         </div>
-        {d.age > 0 && d.age < 18 && <p className="error">VIT Pulse is for students aged 18 and over.</p>}
+        {d.age > 0 && d.age < 18 && <p className="error">18+ only.</p>}
         <div className="field-row">
           <label className="field">Program<input value={d.program} maxLength={32} placeholder="e.g. CSE, ECE, BBA" onChange={e => set('program', e.target.value)} /></label>
           <label className="field">Year<select value={d.year} onChange={e => set('year', e.target.value)}>{YEARS.map(y => <option key={y}>{y}</option>)}</select></label>
@@ -54,27 +52,25 @@ export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onD
       </>}
 
       {step === 1 && <>
-        <h2>Show a little <em>personality</em></h2>
+        <h2>Your <em>card</em></h2>
         <div className="photo-row">
           <Portrait name={d.name} photoURL={d.photoURL} hue={d.hue} />
           <div>
-            <b><Camera size={14} /> Card photo</b>
-            <span className="muted">Use your Google photo, or a colour portrait if you&apos;d rather stay anonymous until you match.</span>
+            <b><Camera size={14} /> Photo</b>
             <div className="hue-row">
               {initial.photoURL && <button type="button" className={`pill${d.photoURL ? ' on' : ''}`} onClick={() => set('photoURL', d.photoURL ? null : initial.photoURL)}>{d.photoURL ? 'Using Google photo' : 'Use Google photo'}</button>}
               {[340, 15, 45, 160, 210, 280].map(h => <button type="button" key={h} aria-label={`Colour ${h}`} className={`swatch${!d.photoURL && d.hue === h ? ' on' : ''}`} style={{ background: `hsl(${h} 70% 55%)` }} onClick={() => setD(x => ({ ...x, hue: h, photoURL: null }))} />)}
             </div>
           </div>
         </div>
-        <label className="field">Bio <small>optional</small><textarea value={d.bio} maxLength={200} rows={2} placeholder="A line or two about you" onChange={e => set('bio', e.target.value)} /></label>
-        <label className="field">What are you up to? <small>optional, shown on your card</small><input value={d.status} maxLength={80} placeholder="e.g. Looking for a badminton partner" onChange={e => set('status', e.target.value)} /></label>
-        <div className="field">Interests <small>pick 3–6</small><Chips items={INTERESTS} active={d.interests} onToggle={s => toggle('interests', s)} max={6} /></div>
-        <div className="field">Open to <small>pick at least one</small><Chips items={OPEN_TO} active={d.openTo} onToggle={s => toggle('openTo', s)} /></div>
+        <label className="field">Bio<textarea value={d.bio} maxLength={200} rows={2} placeholder="A line about you" onChange={e => set('bio', e.target.value)} /></label>
+        <label className="field">Status<input value={d.status} maxLength={80} placeholder="e.g. Looking for a badminton partner" onChange={e => set('status', e.target.value)} /></label>
+        <div className="field">Interests <small>3–6</small><Chips items={INTERESTS} active={d.interests} onToggle={s => toggle('interests', s)} max={6} /></div>
+        <div className="field">Open to<Chips items={OPEN_TO} active={d.openTo} onToggle={s => toggle('openTo', s)} /></div>
       </>}
 
       {step === 2 && <>
-        <h2>Answer <em>two prompts</em></h2>
-        <p className="muted">Prompts give people something better to open with than “hi”.</p>
+        <h2>Two <em>prompts</em></h2>
         {d.prompts.map((p, i) => (
           <div className="prompt-edit" key={i}>
             <select value={p.q} onChange={e => setPrompt(i, { q: e.target.value })}>{PROMPTS.map(q => <option key={q} disabled={q !== p.q && d.prompts.some(x => x.q === q)}>{q}</option>)}</select>
@@ -84,10 +80,10 @@ export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onD
       </>}
 
       {step === 3 && <>
-        <h2>Smarter <em>matches</em></h2>
-        <p className="muted">Optional. With location on, Pulse quietly learns your rhythm — night owl or early bird, explorer or creature of habit — and uses it to find people whose days fit yours. Your location is never shown to anyone and never leaves your phone; only those lifestyle hints are used.</p>
+        <h2>Better <em>matches</em></h2>
+        <p className="muted">Use location to learn your daily rhythm. Never shown to anyone.</p>
         <div className="location-box">
-          <div><MapPin size={18} /><div><b>Lifestyle matching</b><span>{locationOn ? 'On — matches get better over the next few days.' : 'Off — matching still works from your quiz and interests.'}</span></div></div>
+          <div><MapPin size={18} /><div><b>Location</b><span>{locationOn ? 'On' : 'Off'}</span></div></div>
           {locationOn ? <span className="signal">ON</span> : <button type="button" className="secondary-button" onClick={requestLocation}>Turn on</button>}
         </div>
       </>}
@@ -95,68 +91,44 @@ export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onD
       <div className="builder-foot">
         {step > 0 ? <button type="button" className="ghost-button" onClick={() => setStep(step - 1)}><ArrowLeft size={16} /> Back</button> : onCancel ? <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button> : <span />}
         <button type="button" className="primary-button" disabled={!valid[step] || saving} onClick={() => last ? onDone(d) : setStep(step + 1)}>
-          {mode === 'edit' && last ? (saving ? 'Saving…' : 'Save profile') : step === 3 ? <>Calibrate the machine <Sparkles size={16} /></> : <>Continue <ArrowRight size={16} /></>}
+          {mode === 'edit' && last ? (saving ? 'Saving…' : 'Save profile') : step === 3 ? <>Next <ArrowRight size={16} /></> : <>Continue <ArrowRight size={16} /></>}
         </button>
       </div>
     </section>
   )
 }
 
-/** Turing Connection Engine intro, then the 36-question calibration. */
+/** Short intro, then the 36-question personality quiz. */
 export function QuizIntro({ onDone, onBack }: { onDone: (answers: number[]) => void; onBack?: () => void }) {
   const [started, setStarted] = useState(false)
   if (started) return <Calibration onBack={() => setStarted(false)} onDone={onDone} />
   return (
-    <section className="builder turing-intro">
-      <span className="panel-kicker">TURING CONNECTION ENGINE <span>V9.4</span></span>
-      <h2>Calibrate <em>the machine</em></h2>
-      <p className="muted">36 everyday questions. There are no right answers — pick whatever feels closest. The machine reads each answer like a cell on a tape and builds a picture of how you tick, getting more certain with every step.</p>
-      <div className="intro-tape" aria-hidden>{Array.from({ length: 12 }, (_, i) => <span key={i} className={i === 0 ? 'head' : ''} />)}</div>
-      <ul className="intro-points"><li>About 4 minutes</li><li>Answers stay private — only your match % is shared</li><li>You can go back and change an answer</li></ul>
-      <div className="builder-foot">{onBack ? <button type="button" className="ghost-button" onClick={onBack}><ArrowLeft size={16} /> Back</button> : <span />}<button className="primary-button" onClick={() => setStarted(true)}>Start calibration <ArrowRight size={16} /></button></div>
+    <section className="builder quiz-intro">
+      <span className="quiz-emoji">✨</span>
+      <h2>Your <em>personality</em></h2>
+      <p className="muted">36 quick questions. Pick what feels closest.</p>
+      <button className="primary-button wide" onClick={() => setStarted(true)}>Start <ArrowRight size={16} /></button>
+      {onBack && <button type="button" className="ghost-button wide" onClick={onBack}>Back</button>}
     </section>
   )
 }
 
 export function Calibration({ onDone, onBack }: { onDone: (answers: number[]) => void; onBack?: () => void }) {
   const [answers, setAnswers] = useState<number[]>([])
-  const [halting, setHalting] = useState(false)
-  const tapeRef = useRef<HTMLDivElement>(null)
   const total = QUESTIONS.length, q = Math.min(answers.length, total - 1), item = QUESTIONS[q]
-  // Re-run the Kalman filter over the answers so far (cheap: 36 small updates).
-  const live = useMemo(() => { const kf = new TraitKalman(); answers.forEach((a, i) => kf.update(i, a)); return kf }, [answers])
-  const certainty = Math.round(live.certainty() * 100)
-  useEffect(() => { tapeRef.current?.querySelector('.cell.head')?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }) }, [answers.length])
   const pick = (i: number) => {
-    if (halting) return
     const next = [...answers, i]
-    setAnswers(next)
-    if (next.length === total) { setHalting(true); setTimeout(() => onDone(next), 900) }
+    if (next.length === total) onDone(next); else setAnswers(next)
   }
   return (
-    <section className={`calibration turing${halting ? ' halting' : ''}`}>
-      <div className="machine-head">
-        <span className="panel-kicker">TURING CONNECTION ENGINE <span>{halting ? 'HALT' : item.domain}</span></span>
-        <div className="counter">{String(Math.min(answers.length + 1, total)).padStart(2, '0')} / {total}</div>
+    <section className="quiz">
+      <div className="quiz-top">
+        <button type="button" className="icon-button" aria-label="Back" onClick={() => answers.length ? setAnswers(answers.slice(0, -1)) : onBack?.()}><ArrowLeft size={18} /></button>
+        <div className="quiz-progress"><i style={{ width: `${(answers.length / total) * 100}%` }} /></div>
+        <span className="quiz-count">{answers.length + 1}/{total}</span>
       </div>
-      <div className="tape-strip" ref={tapeRef} aria-label={`Question ${answers.length + 1} of ${total}`}>
-        {QUESTIONS.map((_, i) => <span key={i} className={`cell${i < answers.length ? ' done' : ''}${i === answers.length && !halting ? ' head' : ''}`}>{i < answers.length ? String.fromCharCode(65 + answers[i]) : ''}</span>)}
-      </div>
-      <div className="register">
-        <span>STATE CERTAINTY</span>
-        <div className="register-bar"><i style={{ width: `${certainty}%` }} /></div>
-        <b>{certainty}%</b>
-      </div>
-      {halting
-        ? <div className="halt"><b>MACHINE HALTED</b><span>Computing your profile…</span></div>
-        : <>
-          <h3 key={q} className="q-text">{item.text}</h3>
-          <div className="choices" key={`c${q}`}>{item.options.map((c, i) => <button key={c} onClick={e => { e.currentTarget.blur(); pick(i) }}><span>{String.fromCharCode(65 + i)}</span>{c}</button>)}</div>
-        </>}
-      <div className="machine-foot">
-        <button type="button" className="ghost-button" disabled={halting} onClick={() => answers.length ? setAnswers(answers.slice(0, -1)) : onBack?.()}><ArrowLeft size={14} /> {answers.length ? 'Previous' : 'Back'}</button>
-        <span>Choose the closest fit</span>
-      </div>
+      <h3 key={q} className="q-text">{item.text}</h3>
+      <div className="choices" key={`c${q}`}>{item.options.map((c, i) => <button key={c} onClick={e => { e.currentTarget.blur(); pick(i) }}>{c}</button>)}</div>
     </section>
   )
 }
@@ -186,10 +158,10 @@ export function TraitDetails({ vector, code }: { vector: number[]; code: string 
   const [open, setOpen] = useState(false)
   return (
     <div className="trait-details">
-      <button className="ghost-button" onClick={() => setOpen(o => !o)}><ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : undefined }} /> {open ? 'Hide' : 'Show'} detailed traits</button>
+      <button className="ghost-button" onClick={() => setOpen(o => !o)}><ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : undefined }} /> {open ? 'Hide' : 'Show'} traits</button>
       {open && <>
         <div className="bars">{FEATURES.map((f, i) => <div className="bar-row" key={f}><label>{f}</label><div><i style={{ width: `${Math.round(vector[i] * 100)}%` }} /></div><span>{Math.round(vector[i] * 100)}</span></div>)}</div>
-        <p className="muted small">Personality code {code}. These traits come from your answers (and, if location is on, your daily rhythm). It&apos;s a fun, lightweight model — not a clinical test.</p>
+        <p className="muted small">Code {code}</p>
       </>}
     </div>
   )

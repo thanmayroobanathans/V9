@@ -37,9 +37,8 @@ export type Person = {
   archetypeCode: string
   /** 11 traits estimated by the Kalman filter over the 36 answers (0…1). */
   vector: number[]
-  /** How settled the estimate is (0…1) and how self-consistent the answers were (0…1). */
+  /** How settled the trait estimate is (0…1). */
   certainty?: number
-  consistency?: number
   jung: Jung
   /** Lifestyle features learned on-device from Kalman-smoothed location. Never coordinates. */
   nature: Nature | null
@@ -144,4 +143,13 @@ export async function sendMessage(matchId: string, uid: string, text: string) {
 export function watchMessages(matchId: string, count: number, cb: (m: Message[], hasMore: boolean) => void, onError: (e: Error) => void): Unsubscribe {
   return onSnapshot(query(collection(need(), 'matches', matchId, 'messages'), orderBy('createdAt', 'asc'), limitToLast(count)), { includeMetadataChanges: true }, s =>
     cb(s.docs.map(d => { const v = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, senderUid: v.senderUid, text: v.text, at: ms(v.createdAt), pending: d.metadata.hasPendingWrites } }), s.size >= count), onError)
+}
+
+// ---- learned taste (private: users/{uid}/preferences/matcher) ----
+export async function loadTaste(uid: string) {
+  const s = await getDoc(doc(need(), 'users', uid, 'preferences', 'matcher'))
+  return s.exists() ? s.data() : null
+}
+export async function saveTaste(uid: string, packed: object) {
+  await setDoc(doc(need(), 'users', uid, 'preferences', 'matcher'), { ...packed, updatedAt: serverTimestamp() })
 }
