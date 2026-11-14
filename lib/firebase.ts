@@ -1,8 +1,8 @@
 'use client'
 
 import { initializeApp, getApps, getApp } from 'firebase/app'
-import { browserLocalPersistence, getAuth, GoogleAuthProvider, setPersistence, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
-import { ALLOWED_DOMAIN, isAllowedEmail } from './config'
+import { browserLocalPersistence, getAdditionalUserInfo, getAuth, GoogleAuthProvider, setPersistence, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
+import { ALLOWED_DOMAIN, emailOf, isAllowedEmail } from './config'
 import { getFirestore, initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager, type Firestore } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -36,9 +36,12 @@ export async function signInWithGoogle() {
   if (!auth) throw new Error('Firebase Authentication is unavailable. Check the Firebase project configuration.')
   await setPersistence(auth, browserLocalPersistence)
   const cred = await signInWithPopup(auth, googleProvider)
-  if (!isAllowedEmail(cred.user.email)) {
+  // Google's profile always carries the email, even when user.email is empty.
+  const profileEmail = (getAdditionalUserInfo(cred)?.profile as { email?: string } | undefined)?.email ?? null
+  const email = emailOf(cred.user) || profileEmail
+  if (!isAllowedEmail(email)) {
     await firebaseSignOut(auth)
-    throw Object.assign(new Error(`Use your @${ALLOWED_DOMAIN} account`), { code: 'auth/domain' })
+    throw Object.assign(new Error(`Use your @${ALLOWED_DOMAIN} account`), { code: 'auth/domain', email })
   }
   return cred
 }

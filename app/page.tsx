@@ -23,7 +23,7 @@ import { ChatView, Inbox, MatchModal, isUnread, matchStarters, otherOf } from '@
 import { Avatar, Chips, Ring } from '@/components/pulse/ui'
 import { FollowLists, Page as FullPage, ProfileScreen, ReportPage, Requests, Search, type FollowState } from '@/components/pulse/people'
 import { Legal } from '@/components/pulse/legal'
-import { isAllowedEmail, ALLOWED_DOMAIN } from '@/lib/config'
+import { emailOf, isAllowedEmail, ALLOWED_DOMAIN } from '@/lib/config'
 
 type Tab = 'swipe' | 'search' | 'matches' | 'profile'
 type Stage = 'gate' | 'loading' | 'build' | 'reveal' | 'app'
@@ -101,7 +101,7 @@ export default function Page() {
     return onAuthStateChanged(auth, async u => {
       setUser(u)
       if (!u) { setStage('gate'); setMe(null); return }
-      if (!isAllowedEmail(u.email)) { await signOut(); setError(`Use your @${ALLOWED_DOMAIN} account`); return }
+      if (!isAllowedEmail(emailOf(u))) { const em = emailOf(u); await signOut(); setError(em ? `${em} is not a @${ALLOWED_DOMAIN} email` : 'Google did not share your email — try again'); return }
       setStage('loading')
       try { const p = await loadPerson(u.uid); if (isReady(p)) { setMe(p); setStage('app') } else { setPartial(p); setStage('build') } }
       catch (e) { setError(e instanceof Error ? e.message : 'Could not load your profile'); setStage('build') }
@@ -118,7 +118,7 @@ export default function Page() {
         'auth/popup-closed-by-user': 'Sign-in cancelled.', 'auth/cancelled-popup-request': 'Sign-in cancelled.',
         'auth/unauthorized-domain': `This domain isn't authorised — add ${window.location.hostname} in Firebase → Authentication → Settings.`,
         'auth/network-request-failed': 'Network error — check your connection and retry.',
-        'auth/domain': `Only @${ALLOWED_DOMAIN} accounts can sign in.`,
+        'auth/domain': (e as { email?: string | null }).email ? `${(e as { email?: string | null }).email} is not a @${ALLOWED_DOMAIN} email` : 'Google did not share your email — try again',
       }
       setError(msg[code] ?? `Sign-in failed${code ? ` (${code})` : ''}`)
     }
