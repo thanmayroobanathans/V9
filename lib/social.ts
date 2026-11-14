@@ -1,76 +1,64 @@
 'use client'
 
 import {
-  addDoc, collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query,
+  addDoc, collection, deleteField, doc, getDoc, getDocs, limit, limitToLast, onSnapshot, orderBy, query,
   serverTimestamp, setDoc, updateDoc, where, type Unsubscribe,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import type { Jung } from './jung'
+import type { Nature } from './nature'
 
-export const MODEL_VERSION = 'V9.1'
+export const MODEL_VERSION = 'V9.3'
 
-export type Coarse = { lat: number; lng: number }
+export type Gender = 'woman' | 'man' | 'nonbinary'
+export type Seeking = 'women' | 'men' | 'everyone'
+export type Intent = 'long-term' | 'casual' | 'friends' | 'open'
+export type PromptAnswer = { q: string; a: string }
+export type Swipe = 'like' | 'super' | 'pass'
 
-/** Everything another signed-in student may see. Never contains email or precise coordinates. */
+/** Everything another signed-in student may see. No email, no coordinates. */
 export type Person = {
   uid: string
   name: string
+  age: number
+  gender: Gender
+  seeking: Seeking
+  intent: Intent
   program: string
   year: string
   bio: string
   status: string
   interests: string[]
   openTo: string[]
+  prompts: PromptAnswer[]
   photoURL: string | null
   hue: number
   archetype: string
   archetypeCode: string
   vector: number[]
-  /** Rounded to 3 decimals (~110 m). Null when the person hides their location. */
-  loc: Coarse | null
-  locAt: number
-  placeId: string | null
+  jung: Jung
+  /** Lifestyle features learned on-device from Kalman-smoothed location. Never coordinates. */
+  nature: Nature | null
+  /** ~1.2 km area code, used only inside the match score. Never displayed. */
+  area: string | null
+  activeAt: number
   visible: boolean
   sample?: boolean
 }
 
-export type Place = { id: string; name: string; emoji: string; loc: Coarse; createdBy: string; sample?: boolean }
-export type Chat = { id: string; memberUids: string[]; members: Record<string, { name: string; photoURL: string | null; hue: number }>; lastMessage: string; lastAt: number; sample?: boolean }
-export type Message = { id: string; senderUid: string; senderName?: string; text: string; at: number }
+export type Match = { id: string; memberUids: string[]; members: Record<string, { name: string; photoURL: string | null; hue: number }>; lastMessage: string; lastSender: string; lastAt: number; status: 'open' | 'closed'; sample?: boolean }
+export type Message = { id: string; senderUid: string; text: string; at: number; pending?: boolean }
 
 export const INTERESTS = ['Coding', 'Hackathons', 'Music', 'Gym', 'Badminton', 'Cricket', 'Football', 'Photography', 'Anime', 'Movies', 'Gaming', 'Reading', 'Startups', 'Dance', 'Travel', 'Cooking', 'Chai', 'Coffee', 'Art', 'Poetry', 'Debate', 'Robotics', 'Fashion', 'Night walks', 'K-drama', 'Podcasts', 'Volunteering', 'Riviera']
 export const OPEN_TO = ['Study buddy', 'Food runs', 'Sports', 'Project team', 'Exploring campus', 'Just chatting', 'Jam session', 'Gaming']
-export const PLACE_EMOJI = ['📚', '☕', '🍜', '🏸', '⚽', '🎸', '🌳', '💻', '🎨', '🧪', '🏛️', '🌅']
+export const PROMPTS = ['A perfect Sunday on campus looks like…', 'My most irrational fear is…', 'The way to win me over is…', 'I geek out on…', 'Green flags I look for…', 'We will get along if…', 'My go-to Foodys order is…', 'Two truths and a lie…']
+export const INTENT_LABEL: Record<Intent, string> = { 'long-term': 'Something long-term', casual: 'Something casual', friends: 'New friends', open: 'Open to see' }
 
-// ---------------------------------------------------------------------------
-// Location helpers
-// ---------------------------------------------------------------------------
-export const coarsen = (lat: number, lng: number): Coarse => ({ lat: Math.round(lat * 1000) / 1000, lng: Math.round(lng * 1000) / 1000 })
-export function metres(a: Coarse, b: Coarse) {
-  const R = 6371000, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2
-  return 2 * R * Math.asin(Math.sqrt(h))
-}
-/** Bearing in degrees, 0 = north. */
-export function bearing(a: Coarse, b: Coarse) {
-  const r = Math.PI / 180, y = Math.sin((b.lng - a.lng) * r) * Math.cos(b.lat * r)
-  const x = Math.cos(a.lat * r) * Math.sin(b.lat * r) - Math.sin(a.lat * r) * Math.cos(b.lat * r) * Math.cos((b.lng - a.lng) * r)
-  return (Math.atan2(y, x) / r + 360) % 360
-}
-/** Deliberately fuzzy: locations are only ~110 m accurate, so never claim more. */
-export function distanceLabel(m: number | null) {
-  if (m === null) return 'Location hidden'
-  if (m < 150) return 'Right here'
-  if (m < 400) return '~5 min walk'
-  if (m < 1000) return `~${Math.round(m / 100) * 100} m away`
-  if (m < 10000) return `~${(m / 1000).toFixed(1)} km away`
-  return 'Far away'
-}
 export const ACTIVE_MS = 30 * 60 * 1000
-export const isActive = (p: Person) => !!p.locAt && Date.now() - p.locAt < ACTIVE_MS
-export function lastSeen(p: Person) {
-  if (!p.locAt) return ''
-  const m = Math.round((Date.now() - p.locAt) / 60000)
-  return m < 2 ? 'active now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`
+export const isActive = (p: Pick<Person, 'activeAt'>) => !!p.activeAt && Date.now() - p.activeAt < ACTIVE_MS
+export function genderMatches(me: Pick<Person, 'seeking' | 'gender'>, other: Pick<Person, 'seeking' | 'gender'>) {
+  const wants = (s: Seeking, g: Gender) => s === 'everyone' || (s === 'women' && g === 'woman') || (s === 'men' && g === 'man')
+  return wants(me.seeking, other.gender) && wants(other.seeking, me.gender)
 }
 
 // ---------------------------------------------------------------------------
@@ -79,64 +67,77 @@ export function lastSeen(p: Person) {
 export const pairId = (a: string, b: string) => [a, b].sort().join('_')
 const need = () => { if (!db) throw new Error('Firestore is unavailable'); return db }
 const ms = (t: unknown) => (t && typeof t === 'object' && 'toMillis' in t ? (t as { toMillis: () => number }).toMillis() : typeof t === 'number' ? t : Date.now())
-const toPerson = (id: string, v: Record<string, unknown>) => ({ ...(v as unknown as Person), uid: id, locAt: ms(v.locAt), placeId: (v.placeId as string) ?? null, loc: (v.loc as Coarse) ?? null })
+const toPerson = (id: string, v: Record<string, unknown>): Person => ({ ...(v as unknown as Person), uid: id, activeAt: ms(v.activeAt ?? v.locAt ?? 0), nature: (v.nature as Nature) ?? null, area: (v.area as string) ?? null })
 
+// ---- profiles ----
 export async function loadPerson(uid: string) {
   const snap = await getDoc(doc(need(), 'publicProfiles', uid))
   return snap.exists() ? toPerson(uid, snap.data()) : null
 }
-
 export async function savePerson(p: Person) {
   const { sample: _s, ...data } = p
-  await setDoc(doc(need(), 'publicProfiles', p.uid), { ...data, modelVersion: MODEL_VERSION, updatedAt: serverTimestamp() }, { merge: true })
+  // Older versions stored a coarse `loc`; remove it so no coordinates remain in public profiles.
+  await setDoc(doc(need(), 'publicProfiles', p.uid), { ...data, loc: deleteField(), locAt: deleteField(), placeId: deleteField(), modelVersion: MODEL_VERSION, updatedAt: serverTimestamp() }, { merge: true })
 }
-
-export async function updateLocation(uid: string, loc: Coarse | null, placeId: string | null) {
-  await updateDoc(doc(need(), 'publicProfiles', uid), { loc, placeId, locAt: Date.now() })
+/** Publishes the derived lifestyle signals (never coordinates). */
+export async function updateSignals(uid: string, area: string | null, nature: Nature | null) {
+  await updateDoc(doc(need(), 'publicProfiles', uid), { area, nature, activeAt: Date.now() })
 }
-
 export function watchPeople(cb: (p: Person[]) => void, onError: (e: Error) => void): Unsubscribe {
-  return onSnapshot(query(collection(need(), 'publicProfiles'), where('visible', '==', true), limit(300)), s => cb(s.docs.map(d => toPerson(d.id, d.data()))), onError)
+  return onSnapshot(query(collection(need(), 'publicProfiles'), where('visible', '==', true), limit(500)), s => cb(s.docs.map(d => toPerson(d.id, d.data()))), onError)
 }
 
-// ---- direct chats ----
-export async function openChat(me: Person, them: Pick<Person, 'uid' | 'name' | 'photoURL' | 'hue'>) {
-  const id = pairId(me.uid, them.uid), ref = doc(need(), 'chats', id)
-  const snap = await getDoc(ref).catch(() => null)
-  if (!snap?.exists()) {
+// ---- swipes & matches ----
+export async function loadMySwipes(uid: string) {
+  const s = await getDocs(query(collection(need(), 'connections'), where('fromUid', '==', uid)))
+  return s.docs.map(d => d.data().toUid as string)
+}
+/** Records a swipe. Returns the match id if this completes a mutual like. */
+export async function swipe(me: Person, them: Person, kind: Swipe): Promise<string | null> {
+  const d = need()
+  await setDoc(doc(d, 'connections', `${me.uid}_${them.uid}`), { fromUid: me.uid, toUid: them.uid, type: kind, createdAt: serverTimestamp() })
+  if (kind === 'pass') return null
+  const back = await getDoc(doc(d, 'connections', `${them.uid}_${me.uid}`))
+  if (!back.exists() || back.data().type === 'pass') return null
+  const id = pairId(me.uid, them.uid), ref = doc(d, 'matches', id)
+  const existing = await getDoc(ref).catch(() => null)
+  if (!existing?.exists()) {
     await setDoc(ref, {
       memberUids: [me.uid, them.uid].sort(),
       members: { [me.uid]: { name: me.name, photoURL: me.photoURL, hue: me.hue }, [them.uid]: { name: them.name, photoURL: them.photoURL, hue: them.hue } },
-      lastMessage: '', lastAt: serverTimestamp(), createdAt: serverTimestamp(),
-    }).catch(async e => { if (!(await getDoc(ref)).exists()) throw e })
+      status: 'open', createdAt: serverTimestamp(), lastAt: serverTimestamp(), lastMessage: '', lastSender: '',
+    }).catch(async e => { if (!(await getDoc(ref)).exists()) throw e }) // the other person may have created it a moment earlier
   }
   return id
 }
-export function watchChats(uid: string, cb: (c: Chat[]) => void, onError: (e: Error) => void): Unsubscribe {
-  return onSnapshot(query(collection(need(), 'chats'), where('memberUids', 'array-contains', uid)), s =>
-    cb(s.docs.map(d => { const v = d.data(); return { id: d.id, memberUids: v.memberUids, members: v.members, lastMessage: v.lastMessage ?? '', lastAt: ms(v.lastAt) } })), onError)
+/**
+ * Live list of every conversation I'm in. Each match document carries the latest message
+ * preview and its sender, so one listener is enough to notice new messages in ALL threads at
+ * once — if A and B both message C, C's listener fires for both.
+ */
+export function watchMatches(uid: string, cb: (m: Match[]) => void, onError: (e: Error) => void): Unsubscribe {
+  return onSnapshot(query(collection(need(), 'matches'), where('memberUids', 'array-contains', uid)), s =>
+    cb(s.docs.map(x => { const v = x.data({ serverTimestamps: 'estimate' }); return { id: x.id, memberUids: v.memberUids, members: v.members, lastMessage: v.lastMessage ?? '', lastSender: v.lastSender ?? '', lastAt: ms(v.lastAt), status: v.status ?? 'open' } })), onError)
 }
-export async function sendChatMessage(chatId: string, uid: string, text: string) {
+export async function unmatch(matchId: string) {
+  await updateDoc(doc(need(), 'matches', matchId), { status: 'closed', lastAt: serverTimestamp() })
+}
+
+// ---- messages ----
+/**
+ * Each message is its own document under matches/{pairId}/messages with an auto id, so any
+ * number of people can message each other simultaneously without write contention: every
+ * conversation is a separate document path. With 100 people online, each pair writes to its own
+ * thread; the per-thread preview update is one small write per message.
+ * Firestore's offline cache queues messages sent without signal and delivers them on reconnect.
+ */
+export async function sendMessage(matchId: string, uid: string, text: string) {
   const d = need()
-  await addDoc(collection(d, 'chats', chatId, 'messages'), { senderUid: uid, text, createdAt: serverTimestamp() })
-  await updateDoc(doc(d, 'chats', chatId), { lastMessage: text.slice(0, 120), lastAt: serverTimestamp() })
+  await addDoc(collection(d, 'matches', matchId, 'messages'), { senderUid: uid, text, createdAt: serverTimestamp() })
+  await updateDoc(doc(d, 'matches', matchId), { lastMessage: text.slice(0, 120), lastSender: uid, lastAt: serverTimestamp() })
 }
-
-// ---- places (hangout spots) ----
-export async function loadPlaces() {
-  const s = await getDocs(query(collection(need(), 'places'), limit(300)))
-  return s.docs.map(d => ({ ...(d.data() as Place), id: d.id }))
-}
-export async function createPlace(uid: string, name: string, emoji: string, loc: Coarse) {
-  const ref = await addDoc(collection(need(), 'places'), { name, emoji, loc, createdBy: uid, createdAt: serverTimestamp() })
-  return { id: ref.id, name, emoji, loc, createdBy: uid } as Place
-}
-export async function sendPlaceMessage(placeId: string, uid: string, senderName: string, text: string) {
-  await addDoc(collection(need(), 'places', placeId, 'messages'), { senderUid: uid, senderName, text, createdAt: serverTimestamp() })
-}
-
-/** Shared by direct chats and place rooms. */
-export function watchMessages(path: ['chats' | 'places', string], cb: (m: Message[]) => void, onError: (e: Error) => void): Unsubscribe {
-  return onSnapshot(query(collection(need(), path[0], path[1], 'messages'), orderBy('createdAt', 'asc'), limit(300)), s =>
-    cb(s.docs.map(d => { const v = d.data(); return { id: d.id, senderUid: v.senderUid, senderName: v.senderName, text: v.text, at: ms(v.createdAt) } })), onError)
+/** Live tail of a thread. Raise `count` to page further back. */
+export function watchMessages(matchId: string, count: number, cb: (m: Message[], hasMore: boolean) => void, onError: (e: Error) => void): Unsubscribe {
+  return onSnapshot(query(collection(need(), 'matches', matchId, 'messages'), orderBy('createdAt', 'asc'), limitToLast(count)), { includeMetadataChanges: true }, s =>
+    cb(s.docs.map(d => { const v = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, senderUid: v.senderUid, text: v.text, at: ms(v.createdAt), pending: d.metadata.hasPendingWrites } }), s.size >= count), onError)
 }

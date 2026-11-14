@@ -325,3 +325,50 @@ button.chip:not(:disabled):hover{border-color:var(--accent)}
   .place-card{flex-wrap:wrap}.place-actions{grid-auto-flow:column;width:100%;justify-content:end}
 }
 .sample-tag.inline{display:inline-block!important;position:static;margin:0 0 0 8px;padding:2px 6px;font-size:9px;vertical-align:middle;width:auto}
+
+/* ---- V9.2 ---- */
+.muted.small,.small{font-size:12px}
+.center{text-align:center}
+.tag.soft{color:var(--ink);background:var(--panel2);text-transform:none;letter-spacing:0;font-family:inherit;font-size:12px}
+.live-tag{position:absolute;top:14px;right:14px;font:600 10px var(--mono);letter-spacing:.06em;background:#000000a0;color:var(--green);padding:5px 8px;border-radius:6px;z-index:2}
+.liked-tag{margin-left:8px;font-size:11px;color:var(--accent);font-weight:500}
+.quiz-options{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}
+.quiz-options button{display:grid;justify-items:start;gap:6px;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px}
+.quiz-options button:hover{border-color:var(--accent)}
+.quiz-options svg{color:var(--accent)}
+.quiz-options b{font-size:18px}.quiz-options span{color:var(--muted);font-size:13px}
+.type-card{background:linear-gradient(160deg,#ff5a7a1c,var(--panel) 55%);border:1px solid var(--line);border-radius:20px;padding:20px;margin:8px 0 14px}
+.type-head{display:flex;gap:14px;align-items:center}
+.type-emoji{font-size:40px;width:64px;height:64px;border-radius:18px;background:var(--panel2);display:grid;place-items:center}
+.type-head small{display:block;font:10px var(--mono);letter-spacing:.14em;color:var(--muted)}
+.type-head b{display:block;font-size:26px;letter-spacing:-.02em;margin-top:2px}
+.type-card p{line-height:1.6;margin:14px 0 4px}
+.axes{display:grid;gap:14px;margin-top:16px}
+.axis small{display:block;font:10px var(--mono);letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-bottom:8px}
+.axis-bar{position:relative;height:6px;border-radius:6px;background:linear-gradient(90deg,#7fd1a055,#ff5a7a55)}
+.axis-bar i{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--accent);transform:translate(-50%,-50%);box-shadow:0 2px 8px #0008}
+.axis-ends{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:8px}
+.axis-ends .on{color:var(--ink);font-weight:600}
+.trait-details{margin-bottom:20px}.trait-details .bars{margin-top:12px}
+.sheet-actions{display:flex;justify-content:center;align-items:center;gap:22px;margin:22px 0 8px}
+.sheet-actions .primary-button{margin:0}
+.chat-id-banner{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:6px 6px 6px 14px;margin-top:10px;font-size:13px}
+.chat-id-banner span{flex:1}
+.chat-id-banner b{font:700 14px var(--mono);letter-spacing:.18em;color:var(--gold)}
+.chat-id-banner .ghost-button{min-height:32px;font-size:12px;padding:0 8px}
+.chat-id-banner.subtle{background:none;color:var(--muted)}
+.group-emoji{font-size:22px;width:44px;height:44px;border-radius:50%;background:var(--panel2);display:grid;place-items:center;flex:none}
+.convo-list em{display:flex;align-items:center;gap:3px}
+.row-buttons{display:flex;gap:8px}
+.row-buttons .secondary-button{min-height:34px;padding:0 12px}
+.matches .discover-head h4{flex:1;border:0;margin:26px 0 0}
+.code-input{font:700 22px var(--mono)!important;letter-spacing:.3em;text-align:center;text-transform:uppercase}
+.load-more{align-self:center;font-size:12px}
+.bubble.pending{opacity:.6}
+.explore h4{margin-top:22px}
+.places{margin-top:6px}.places .discover-head h4{flex:1;margin-top:26px}
+@media(max-width:760px){.quiz-options{grid-template-columns:1fr}}
+/* ---- V9.3 ---- */
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);max-width:min(440px,calc(100% - 32px));background:var(--panel2);border:1px solid var(--accent);color:var(--ink);padding:12px 18px;border-radius:16px;font-size:14px;z-index:70;box-shadow:0 12px 30px -12px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:fade .2s}
+.convo-list button.unread b{color:#fff}.convo-list button.unread span{color:var(--ink)}
+.convo-list .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:6px}

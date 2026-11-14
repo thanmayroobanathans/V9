@@ -2,27 +2,31 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { onAuthStateChanged, type User } from 'firebase/auth'
-import { ArrowRight, Compass, LockKeyhole, LogOut, MapPin, MessageSquare, Pencil, RefreshCw, Settings, UserRound, Users } from 'lucide-react'
+import { ArrowRight, Flame, Heart, LockKeyhole, LogOut, MessageSquare, Pencil, RefreshCw, Settings, Sparkles, UserRound } from 'lucide-react'
 import { auth, firebaseConfigured, signInWithGoogle, signOut } from '@/lib/firebase'
-import { classify, compatibility, scoreAnswers } from '@/lib/pulse-model'
+import { classify, scoreAnswers } from '@/lib/pulse-model'
+import { jungFromAnswers, typeInfo } from '@/lib/jung'
+import { fit, jungOf } from '@/lib/match'
+import { GeoKalman } from '@/lib/kalman'
+import { areaCode, clearTrack, computeNature, natureTags, record } from '@/lib/nature'
 import { saveProfile, saveResult } from '@/lib/firestore'
 import {
-  coarsen, createPlace, distanceLabel, loadPerson, loadPlaces, metres, openChat, savePerson, sendChatMessage, sendPlaceMessage,
-  updateLocation, watchChats, watchMessages, watchPeople, type Chat, type Coarse, type Message, type Person, type Place,
+  INTENT_LABEL, PROMPTS, loadMySwipes, loadPerson, pairId, savePerson, sendMessage, swipe, unmatch, updateSignals,
+  watchMatches, watchMessages, watchPeople, type Match, type Message, type Person, type Swipe,
 } from '@/lib/social'
-import { DEFAULT_ANCHOR, samplePeople, samplePlaces, sampleReply } from '@/lib/samples'
-import { Calibration, Dossier, ProfileBuilder, type Draft } from '@/components/pulse/onboarding'
-import { Explore, PersonSheet } from '@/components/pulse/explore'
-import { Places, CHECKIN_M } from '@/components/pulse/places'
-import { ChatList, ChatView, directStarters, otherOf } from '@/components/pulse/chat'
+import { samplePeople, sampleReply } from '@/lib/samples'
+import { ProfileBuilder, QuizIntro, TraitDetails, TypeCard, type Draft } from '@/components/pulse/onboarding'
+import { Discover, ProfileDetail } from '@/components/pulse/discover'
+import { ChatView, Inbox, MatchModal, isUnread, matchStarters, otherOf } from '@/components/pulse/chat'
 import { Avatar, Chips, Ring } from '@/components/pulse/ui'
 
-type Tab = 'explore' | 'places' | 'chats' | 'profile' | 'settings'
-type Stage = 'gate' | 'loading' | 'build' | 'app'
+type Tab = 'swipe' | 'matches' | 'profile' | 'settings'
+type Stage = 'gate' | 'loading' | 'build' | 'reveal' | 'app'
 type Geo = 'off' | 'asking' | 'on' | 'denied'
 
-const nav = [{ id: 'explore', label: 'Explore', icon: Compass }, { id: 'places', label: 'Places', icon: MapPin }, { id: 'chats', label: 'Chats', icon: MessageSquare }, { id: 'profile', label: 'Profile', icon: UserRound }, { id: 'settings', label: 'Settings', icon: Settings }] as const
-const LOC_WRITE_MS = 2 * 60 * 1000
+const nav = [{ id: 'swipe', label: 'Swipe', icon: Flame }, { id: 'matches', label: 'Matches', icon: MessageSquare }, { id: 'profile', label: 'Profile', icon: UserRound }, { id: 'settings', label: 'Settings', icon: Settings }] as const
+const SIGNAL_MS = 10 * 60 * 1000 // publish lifestyle signals at most every 10 minutes
+const PAGE = 100
 
 function useLocal<T>(key: string, init: T): [T, (v: T | ((x: T) => T)) => void] {
   const [v, setV] = useState<T>(init)
@@ -30,34 +34,47 @@ function useLocal<T>(key: string, init: T): [T, (v: T | ((x: T) => T)) => void] 
   const set = useCallback((x: T | ((p: T) => T)) => setV(p => { const n = typeof x === 'function' ? (x as (p: T) => T)(p) : x; try { localStorage.setItem(key, JSON.stringify(n)) } catch { /* ignore */ } return n }), [key])
   return [v, set]
 }
+const isReady = (p: Person | null): p is Person => !!p && !!p.vector?.length && p.age >= 18 && !!p.gender && Array.isArray(p.openTo)
 
 export default function Page() {
   const [user, setUser] = useState<User | null>(null)
   const [stage, setStage] = useState<Stage>('gate')
-  const [tab, setTab] = useState<Tab>('explore')
+  const [tab, setTab] = useState<Tab>('swipe')
   const [me, setMe] = useState<Person | null>(null)
+  const [partial, setPartial] = useState<Person | null>(null)
   const [error, setError] = useState('')
+  const [toast, setToast] = useState<{ text: string; matchId?: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState<'profile' | 'quiz' | null>(null)
-
   const uid = user?.uid ?? 'anon'
-  const [wantLocation, setWantLocation] = useLocal(`pulse91.loc.${uid}`, false)
+
+  // ---------- background location → lifestyle signals ----------
+  const [wantLocation, setWantLocation] = useLocal(`pulse93.loc.${uid}`, false)
   const [geo, setGeo] = useState<Geo>('off')
-  const [here, setHere] = useState<Coarse | null>(null)
-  const lastWrite = useRef<{ at: number; key: string }>({ at: 0, key: '' })
+  const kalman = useRef(new GeoKalman())
+  const lastSignal = useRef(0)
+  const meRef = useRef<Person | null>(null)
+  useEffect(() => { meRef.current = me }, [me])
 
+  // ---------- data ----------
   const [people, setPeople] = useState<Person[]>([])
-  const [places, setPlaces] = useState<Place[]>([])
-  const [chats, setChats] = useState<Chat[]>([])
-  const [sheet, setSheet] = useState<Person | null>(null)
+  const [matches, setMatches] = useState<Match[]>([])
+  const [swiped, setSwiped] = useState<Set<string>>(new Set())
+  const [peopleLoaded, setPeopleLoaded] = useState(false)
+  const [celebrate, setCelebrate] = useState<{ other: Person; matchId: string } | null>(null)
   const [chatId, setChatId] = useState<string | null>(null)
-  const [roomId, setRoomId] = useState<string | null>(null)
+  const [viewing, setViewing] = useState<Person | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
+  const [msgCount, setMsgCount] = useState(PAGE)
+  const [hasMore, setHasMore] = useState(false)
+  const [lastRead, setLastRead] = useLocal<Record<string, number>>(`pulse93.read.${uid}`, {})
+  const seenAt = useRef<Record<string, number> | null>(null)
 
-  const [useSamples, setUseSamples] = useLocal(`pulse91.samples.${uid}`, true)
-  const [sampleChats, setSampleChats] = useLocal<Chat[]>(`pulse91.sampleChats.${uid}`, [])
-  const [sampleMsgs, setSampleMsgs] = useLocal<Record<string, Message[]>>(`pulse91.sampleMsgs.${uid}`, {})
-  const [sampleHere, setSampleHere] = useLocal<string | null>(`pulse91.sampleHere.${uid}`, null)
+  // ---------- sample preview (local only) ----------
+  const [useSamples, setUseSamples] = useLocal(`pulse93.samples.${uid}`, true)
+  const [sampleSwiped, setSampleSwiped] = useLocal<string[]>(`pulse93.sSwiped.${uid}`, [])
+  const [sampleMatches, setSampleMatches] = useLocal<Match[]>(`pulse93.sMatches.${uid}`, [])
+  const [sampleMsgs, setSampleMsgs] = useLocal<Record<string, Message[]>>(`pulse93.sMsgs.${uid}`, {})
 
   // ---------- auth + profile bootstrap ----------
   useEffect(() => {
@@ -66,7 +83,7 @@ export default function Page() {
       setUser(u)
       if (!u) { setStage('gate'); setMe(null); return }
       setStage('loading')
-      try { const p = await loadPerson(u.uid); if (p?.vector?.length && p.openTo) { setMe(p); setStage('app') } else setStage('build') }
+      try { const p = await loadPerson(u.uid); if (isReady(p)) { setMe(p); setStage('app') } else { setPartial(p); setStage('build') } }
       catch (e) { setError(e instanceof Error ? e.message : 'Could not load your profile'); setStage('build') }
     })
   }, [])
@@ -86,130 +103,134 @@ export default function Page() {
     }
   }
 
-  // ---------- live location ----------
+  // GPS → Kalman filter → on-device track → lifestyle features (no coordinates leave the phone).
   useEffect(() => {
-    if (!wantLocation || !user) { setGeo('off'); setHere(null); return }
+    if (!wantLocation || !user) { setGeo('off'); kalman.current.reset(); return }
     if (!navigator.geolocation) { setGeo('denied'); return }
     setGeo('asking')
     const id = navigator.geolocation.watchPosition(
-      p => { setGeo('on'); setHere(coarsen(p.coords.latitude, p.coords.longitude)) },
-      () => { setGeo('denied'); setHere(null) },
-      { enableHighAccuracy: true, maximumAge: 30000, timeout: 20000 },
+      p => {
+        setGeo('on')
+        const s = kalman.current.process({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy, time: p.timestamp || Date.now() })
+        record(s)
+        const cur = meRef.current
+        if (!cur || !s.accepted || Date.now() - lastSignal.current < SIGNAL_MS) return
+        lastSignal.current = Date.now()
+        const nature = computeNature(), area = areaCode(s.lat, s.lng)
+        setMe(m => m ? { ...m, nature, area, activeAt: Date.now() } : m)
+        updateSignals(cur.uid, area, nature).catch(() => { /* retried next interval */ })
+      },
+      () => setGeo('denied'),
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 },
     )
     return () => navigator.geolocation.clearWatch(id)
   }, [wantLocation, user])
 
-  // Publish the coarse location (and drop a check-in once you walk away from it).
-  useEffect(() => {
-    if (!me || stage !== 'app') return
-    let placeId = me.placeId
-    const pl = places.find(x => x.id === placeId)
-    if (here && pl && metres(here, pl.loc) > CHECKIN_M * 2) placeId = null
-    const key = `${here?.lat},${here?.lng},${placeId}`
-    if (key === lastWrite.current.key && Date.now() - lastWrite.current.at < LOC_WRITE_MS) return
-    if (!here && !me.loc && key === lastWrite.current.key) return
-    lastWrite.current = { at: Date.now(), key }
-    setMe(m => m ? { ...m, loc: here, placeId, locAt: Date.now() } : m)
-    updateLocation(me.uid, here, placeId).catch(e => setError(`Location not shared — ${e.message}`))
-  }, [here, me?.placeId, places, stage]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  function requestLocation() { setWantLocation(true) }
-
   // ---------- profile ----------
   const blankDraft = useMemo<Draft>(() => ({
-    uid: user?.uid ?? '', name: user?.displayName?.split(' ')[0] ?? '', program: '', year: '2nd year', bio: '', status: '',
-    interests: [], openTo: [], photoURL: user?.photoURL ?? null, hue: 210, loc: null, locAt: 0, placeId: null, visible: true,
-  }), [user])
+    uid: user?.uid ?? '', name: user?.displayName?.split(' ')[0] ?? '', age: 0, gender: 'woman', seeking: 'men', intent: 'open', program: '', year: '2nd year', bio: '', status: '',
+    interests: [], openTo: [], prompts: [{ q: PROMPTS[0], a: '' }, { q: PROMPTS[2], a: '' }], photoURL: user?.photoURL ?? null, hue: 210, nature: null, area: null, activeAt: 0, visible: true,
+    ...(partial ? Object.fromEntries(Object.entries(partial).filter(([k, v]) => v !== undefined && v !== null && v !== '' && !['loc', 'locAt', 'placeId'].includes(k))) : {}),
+  } as Draft), [user, partial])
 
   async function persist(p: Person, answers?: number[]) {
     if (!user) return
     setSaving(true); setError('')
     try {
-      await saveProfile(user.uid, { subjectName: p.name, email: user.email, locationSignal: p.loc ? 'SHARED (~110 m)' : 'OFF', locationConsent: !!p.loc })
+      await saveProfile(user.uid, { subjectName: p.name, email: user.email, locationSignal: wantLocation ? 'LIFESTYLE SIGNALS ONLY' : 'OFF', locationConsent: wantLocation })
       if (answers) {
         const c = classify(p.vector)
-        await saveResult(user.uid, { subjectName: p.name, archetype: c.primary.name, archetypeCode: c.primary.code, matchScore: c.primary.score, personalityVector: p.vector, rankedArchetypes: c.ranked.slice(0, 8).map(r => ({ name: r.name, code: r.code, score: Math.round(r.score * 1000) / 10 })), locationSignal: p.loc ? 'SHARED' : 'OFF' })
+        await saveResult(user.uid, { subjectName: p.name, archetype: c.primary.name, archetypeCode: c.primary.code, matchScore: c.primary.score, personalityVector: p.vector, rankedArchetypes: c.ranked.slice(0, 8).map(r => ({ name: r.name, code: r.code, score: Math.round(r.score * 1000) / 10 })), locationSignal: typeInfo(p.jung).code })
       }
       await savePerson(p)
     } catch (e) { setError(`Saved on this device only — ${e instanceof Error ? e.message : 'Firestore write failed'}. Check firestore.rules are deployed.`) }
     finally { setSaving(false) }
   }
   async function finishBuild(d: Draft, answers?: number[]) {
-    const vector = answers ? scoreAnswers(answers) : (me?.vector ?? d.vector ?? [])
+    const vector = answers ? scoreAnswers(answers).map(v => Math.round(v * 1000) / 1000) : (me?.vector ?? d.vector ?? [])
+    const jung = answers ? jungFromAnswers(answers) : (me ? jungOf(me) : d.jung!)
     const c = classify(vector).primary
-    const p: Person = { ...d, uid: user!.uid, vector, archetype: c.name, archetypeCode: c.code, loc: here, locAt: Date.now() }
+    const p: Person = { ...d, uid: user!.uid, vector, jung, archetype: c.name, archetypeCode: c.code, nature: me?.nature ?? d.nature ?? null, area: me?.area ?? d.area ?? null, activeAt: Date.now() }
     setMe(p); setEditing(null)
-    if (stage === 'build') { setStage('app'); setTab('explore') }
+    if (stage === 'build') setStage('reveal')
+    else if (answers) setTab('profile')
     await persist(p, answers)
   }
   async function updateMe(patch: Partial<Person>) { if (!me) return; const p = { ...me, ...patch }; setMe(p); await persist(p) }
 
-  // ---------- realtime data ----------
-  const refreshPlaces = useCallback(() => { loadPlaces().then(setPlaces).catch(e => setError(`Places unavailable — ${e.message}`)) }, [])
+  // ---------- realtime subscriptions ----------
   useEffect(() => {
     if (stage !== 'app' || !user) return
-    refreshPlaces()
-    const a = watchPeople(setPeople, e => setError(`Explore unavailable — ${e.message}`))
-    const b = watchChats(user.uid, setChats, e => setError(`Chats unavailable — ${e.message}`))
-    return () => { a(); b() }
-  }, [stage, user, refreshPlaces])
+    loadMySwipes(user.uid).then(ids => setSwiped(new Set(ids))).catch(() => {})
+    const subs = [
+      watchPeople(p => { setPeople(p); setPeopleLoaded(true) }, e => { setPeopleLoaded(true); setError(`People unavailable — ${e.message}`) }),
+      watchMatches(user.uid, setMatches, e => setError(`Matches unavailable — ${e.message}`)),
+    ]
+    return () => subs.forEach(u => u())
+  }, [stage, user])
 
-  const anchor = here ?? DEFAULT_ANCHOR
-  const sPeople = useMemo(() => useSamples ? samplePeople(anchor) : [], [useSamples, anchor.lat, anchor.lng]) // eslint-disable-line react-hooks/exhaustive-deps
-  const sPlaces = useMemo(() => useSamples ? samplePlaces(anchor) : [], [useSamples, anchor.lat, anchor.lng]) // eslint-disable-line react-hooks/exhaustive-deps
-  const realOthers = people.filter(p => p.uid !== me?.uid)
-  const allPeople = useMemo(() => [...realOthers, ...sPeople], [realOthers, sPeople]) // eslint-disable-line react-hooks/exhaustive-deps
-  const allPlaces = useMemo(() => [...places, ...sPlaces], [places, sPlaces])
+  // ---------- merged real + sample views ----------
+  const sPeople = useMemo(() => useSamples ? samplePeople(me?.area ?? null) : [], [useSamples, me?.area])
+  const realOthers = useMemo(() => people.filter(p => p.uid !== me?.uid), [people, me?.uid])
+  const allPeople = useMemo(() => [...realOthers, ...sPeople], [realOthers, sPeople])
   const byUid = useMemo(() => Object.fromEntries(allPeople.map(p => [p.uid, p])), [allPeople])
-  const meView = me && useSamples && sampleHere ? { ...me, placeId: sampleHere } : me
-  const allChats = useMemo(() => [...chats, ...(useSamples ? sampleChats.map(c => { const l = sampleMsgs[c.id] ?? []; const last = l[l.length - 1]; return { ...c, lastMessage: last?.text ?? '', lastAt: last?.at ?? c.lastAt } }) : [])], [chats, sampleChats, sampleMsgs, useSamples])
+  const allSwiped = useMemo(() => new Set([...swiped, ...sampleSwiped]), [swiped, sampleSwiped])
+  const candidates = useMemo(() => allPeople.filter(p => !allSwiped.has(p.uid)), [allPeople, allSwiped])
+  const allMatches = useMemo(() => [...matches, ...(useSamples ? sampleMatches.map(m => { const l = sampleMsgs[m.id] ?? [], last = l[l.length - 1]; return { ...m, lastMessage: last?.text ?? '', lastSender: last?.senderUid ?? '', lastAt: last?.at ?? m.lastAt } }) : [])], [matches, sampleMatches, sampleMsgs, useSamples])
+  const active = allMatches.find(m => m.id === chatId) ?? null
 
-  const activeChat = allChats.find(c => c.id === chatId) ?? null
-  const activeRoom = allPlaces.find(p => p.id === roomId) ?? null
+  // Incoming-message notifications across ALL threads (e.g. A and B both message C).
   useEffect(() => {
-    setMessages([])
-    if (activeChat && !activeChat.sample) return watchMessages(['chats', activeChat.id], setMessages, e => setError(`Chat unavailable — ${e.message}`))
-    if (activeRoom && !activeRoom.sample) return watchMessages(['places', activeRoom.id], setMessages, e => setError(`Room unavailable — ${e.message}`))
-  }, [activeChat?.id, activeRoom?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!me) return
+    const prev = seenAt.current
+    const next: Record<string, number> = {}
+    for (const m of allMatches) {
+      next[m.id] = m.lastAt
+      if (prev && m.lastSender && m.lastSender !== me.uid && m.lastAt > (prev[m.id] ?? 0) && m.id !== chatId && m.lastMessage) {
+        setToast({ text: `${m.members[m.lastSender]?.name ?? 'Someone'}: ${m.lastMessage}`, matchId: m.id })
+      }
+    }
+    seenAt.current = next
+  }, [allMatches]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 4000); return () => clearTimeout(t) }, [toast])
+  // Mark the open thread as read whenever it changes.
+  useEffect(() => { if (active) setLastRead(r => ({ ...r, [active.id]: Math.max(Date.now(), active.lastAt) })) }, [active?.id, active?.lastAt]) // eslint-disable-line react-hooks/exhaustive-deps
+  const unreadCount = me ? allMatches.filter(m => m.status === 'open' && (isUnread(m, me.uid, lastRead) || !m.lastMessage)).length : 0
+  useEffect(() => { document.title = unreadCount ? `(${unreadCount}) VIT Pulse` : 'VIT Pulse' }, [unreadCount])
+
+  useEffect(() => { setMsgCount(PAGE) }, [chatId])
+  useEffect(() => {
+    setMessages([]); setHasMore(false)
+    if (!chatId || !active || active.sample) return
+    return watchMessages(chatId, msgCount, (m, more) => { setMessages(m); setHasMore(more) }, e => setError(`Chat unavailable — ${e.message}`))
+  }, [chatId, msgCount, !!active, active?.sample]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- actions ----------
-  async function startChat(p: Person) {
+  async function handleSwipe(p: Person, kind: Swipe) {
     if (!me) return
-    setSheet(null)
     if (p.sample) {
-      const id = `sample-chat-${p.uid}`
-      setSampleChats(cs => cs.some(c => c.id === id) ? cs : [...cs, { id, sample: true, memberUids: [me.uid, p.uid], lastMessage: '', lastAt: Date.now(), members: { [me.uid]: { name: me.name, photoURL: me.photoURL, hue: me.hue }, [p.uid]: { name: p.name, photoURL: null, hue: p.hue } } }])
-      setTab('chats'); setRoomId(null); setChatId(id); return
+      setSampleSwiped(s => [...s, p.uid])
+      if (kind !== 'pass' && (kind === 'super' || fit(me, p).score >= 66)) {
+        const id = pairId(me.uid, p.uid)
+        setSampleMatches(ms => ms.some(x => x.id === id) ? ms : [...ms, { id, sample: true, status: 'open', memberUids: [me.uid, p.uid], lastAt: Date.now(), lastMessage: '', lastSender: '', members: { [me.uid]: { name: me.name, photoURL: me.photoURL, hue: me.hue }, [p.uid]: { name: p.name, photoURL: null, hue: p.hue } } }])
+        setCelebrate({ other: p, matchId: id })
+      }
+      return
     }
-    try { const id = await openChat(me, p); setTab('chats'); setRoomId(null); setChatId(id) }
-    catch (e) { setError(`Could not open chat — ${e instanceof Error ? e.message : 'write failed'}`) }
+    setSwiped(s => new Set(s).add(p.uid))
+    try { const id = await swipe(me, p, kind); if (id) setCelebrate({ other: p, matchId: id }) }
+    catch (e) { setError(`Not saved — ${e instanceof Error ? e.message : 'write failed'}`) }
   }
-  function localSend(key: string, text: string, replyFrom?: { uid: string; name: string }) {
-    if (!me) return
-    const now = Date.now()
-    setSampleMsgs(x => ({ ...x, [key]: [...(x[key] ?? []), { id: `${now}`, senderUid: me.uid, senderName: me.name, text, at: now }] }))
-    if (replyFrom) setTimeout(() => setSampleMsgs(x => { const l = x[key] ?? []; const n = l.filter(m => m.senderUid === replyFrom.uid).length; return { ...x, [key]: [...l, { id: `${Date.now()}r`, senderUid: replyFrom.uid, senderName: replyFrom.name, text: sampleReply(n), at: Date.now() }] } }), 1400)
-  }
-  async function sendDirect(text: string) {
-    if (!activeChat || !me) return
-    if (activeChat.sample) { const o = otherOf(activeChat, me.uid); return localSend(activeChat.id, text, { uid: o, name: activeChat.members[o]?.name }) }
-    try { await sendChatMessage(activeChat.id, me.uid, text) } catch (e) { setError(`Message not sent — ${e instanceof Error ? e.message : 'write failed'}`) }
-  }
-  async function sendRoom(text: string) {
-    if (!activeRoom || !me) return
-    if (activeRoom.sample) { const p = sPeople.find(x => x.placeId === activeRoom.id); return localSend(activeRoom.id, text, p ? { uid: p.uid, name: p.name } : undefined) }
-    try { await sendPlaceMessage(activeRoom.id, me.uid, me.name, text) } catch (e) { setError(`Message not sent — ${e instanceof Error ? e.message : 'write failed'}`) }
-  }
-  async function checkIn(id: string | null) {
-    if (!me) return
-    if (id?.startsWith('sample-') || (id === null && sampleHere)) { setSampleHere(id); if (id) return }
-    lastWrite.current.key = ''
-    setMe(m => m ? { ...m, placeId: id } : m)
-  }
-  async function addPlace(name: string, emoji: string) {
-    if (!me || !here) return
-    try { const pl = await createPlace(me.uid, name, emoji, here); setPlaces(ps => [...ps, pl]); setSampleHere(null); checkIn(pl.id) }
-    catch (e) { setError(`Could not add spot — ${e instanceof Error ? e.message : 'write failed'}`) }
+  function openChat(id: string) { setTab('matches'); setEditing(null); setChatId(id); setToast(null) }
+  async function handleSend(text: string) {
+    if (!active || !me) return
+    if (active.sample) {
+      const id = active.id, them = otherOf(active, me.uid), now = Date.now()
+      setSampleMsgs(x => ({ ...x, [id]: [...(x[id] ?? []), { id: `${now}`, senderUid: me.uid, text, at: now }] }))
+      setTimeout(() => setSampleMsgs(x => { const l = x[id] ?? []; const n = l.filter(m => m.senderUid === them).length; return { ...x, [id]: [...l, { id: `${Date.now()}r`, senderUid: them, text: sampleReply(n), at: Date.now() }] } }), 1400)
+      return
+    }
+    try { await sendMessage(active.id, me.uid, text) } catch (e) { setError(`Message not sent — ${e instanceof Error ? e.message : 'write failed'}`) }
   }
 
   // ---------- render ----------
@@ -218,85 +239,100 @@ export default function Page() {
       <div className="gate-glow" />
       <div className="gate-inner">
         <div className="eyebrow"><span className="status-dot" /> VIT PULSE / V9</div>
-        <h1>See who&apos;s around.<br /><em>Say hi.</em></h1>
-        <p className="muted">Explore students and hangout spots near you on campus, and chat with anyone — matched by a 36-question vibe quiz.</p>
-        <div className="gate-points"><span><MapPin size={14} /> Live radar of people nearby</span><span><Users size={14} /> Check in to spots, join their chat rooms</span><span><LockKeyhole size={14} /> Location rounded to ~100 m, never exact</span></div>
+        <h1>Swipe less.<br /><em>Click more.</em></h1>
+        <p className="muted">Swipe through VIT students picked for you by a personality quiz and your daily rhythm. Match when you both like each other, then chat.</p>
+        <div className="gate-points"><span><Sparkles size={14} /> Picks explained in plain words</span><span><Heart size={14} /> Chat opens on a mutual like</span><span><LockKeyhole size={14} /> Your location is never shown to anyone</span></div>
         <button className="primary-button wide" onClick={login}><LockKeyhole size={16} /> Continue with Google <ArrowRight size={16} /></button>
         {!firebaseConfigured && <p className="config-note">Firebase configuration required.</p>}
         {error && <p className="error">{error}</p>}
-        <div className="gate-footer"><span>VIT students</span><span>V9.1</span></div>
+        <div className="gate-footer"><span>18+ · VIT students</span><span>V9.3</span></div>
       </div>
     </main>
   )
   if (stage === 'loading') return <main className="gate"><div className="gate-inner center"><RefreshCw className="spin" /><p className="muted">Loading your profile…</p></div></main>
-  if (stage === 'build') return <main className="solo">{error && <p className="error banner" onClick={() => setError('')}>{error}</p>}<ProfileBuilder initial={blankDraft} mode="onboard" locationOn={geo === 'on' || geo === 'asking'} requestLocation={requestLocation} onDone={finishBuild} saving={saving} /></main>
-  if (!me || !meView) return null
+  if (stage === 'build') return <main className="solo">{error && <p className="error banner" onClick={() => setError('')}>{error}</p>}<ProfileBuilder initial={blankDraft} mode="onboard" locationOn={geo === 'on' || geo === 'asking'} requestLocation={() => setWantLocation(true)} onDone={finishBuild} saving={saving} /></main>
+  if (stage === 'reveal' && me) return (
+    <main className="solo"><section className="builder">
+      <span className="panel-kicker">ALL SET</span><h2>Meet <em>you</em></h2>
+      <TypeCard jung={me.jung} />
+      <p className="muted">Pulse uses this, your interests{wantLocation ? ' and your daily rhythm' : ''} to rank people you&apos;re likely to click with. Every card tells you why.</p>
+      <button className="primary-button wide" onClick={() => { setStage('app'); setTab('swipe') }}>Start swiping <ArrowRight size={16} /></button>
+    </section></main>
+  )
+  if (!me) return null
 
-  const inChat = (tab === 'chats' && activeChat) || (tab === 'places' && activeRoom)
-  const chatOther = activeChat ? byUid[otherOf(activeChat, me.uid)] : undefined
-  const roomPeople = activeRoom ? allPeople.filter(p => p.placeId === activeRoom.id) : []
-  const go = (t: Tab) => { setTab(t); setEditing(null); setChatId(null); setRoomId(null) }
-  const sampleNote = realOthers.length === 0 && useSamples ? 'No other students are online yet — showing SAMPLE people and spots around you so you can try things out. They are fictional and stay on this device.' : undefined
+  const go = (t: Tab) => { setTab(t); setEditing(null); setChatId(null) }
+  const sampleNote = realOthers.length === 0 && useSamples ? 'No other students have joined yet — showing SAMPLE people so you can try swiping and chatting. They are fictional and stay on this device.' : undefined
+  const other = active ? byUid[otherOf(active, me.uid)] : undefined
+  const myTags = natureTags(me.nature)
 
   return (
-    <div className={`app-shell${inChat ? ' in-chat' : ''}`}>
-      <header className="topbar"><div className="brand">VIT PULSE <span>/ V9</span></div><div className="top-status"><span className={`status-dot${geo === 'on' ? '' : ' off'}`} /> {geo === 'on' ? 'LOCATION ON' : geo === 'asking' ? 'LOCATING…' : geo === 'denied' ? 'LOCATION BLOCKED' : 'LOCATION OFF'}<button onClick={() => go('profile')} aria-label="Your profile"><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={28} /></button></div></header>
+    <div className={`app-shell${chatId ? ' in-chat' : ''}`}>
+      <header className="topbar"><div className="brand">VIT PULSE <span>/ V9</span></div><div className="top-status"><span className="status-dot" /> {me.visible ? 'VISIBLE' : 'HIDDEN'}<button onClick={() => go('profile')} aria-label="Your profile"><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={28} /></button></div></header>
       <div className="app-body">
         <aside className="sidebar">
-          <div className="subject-chip"><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={36} /><div><b>{me.name}</b><small>{me.archetypeCode} {me.archetype}</small></div></div>
-          <nav>{nav.map(({ id, label, icon: Icon }) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => go(id)}><Icon size={17} />{label}</button>)}</nav>
-          <div className="sidebar-foot">{me.visible ? 'VISIBLE ON EXPLORE' : 'HIDDEN FROM EXPLORE'}<br />V9.1 · EXPLORE + CHAT</div>
+          <div className="subject-chip"><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={36} /><div><b>{me.name}</b><small>{typeInfo(jungOf(me)).emoji} {typeInfo(jungOf(me)).name}</small></div></div>
+          <nav>{nav.map(({ id, label, icon: Icon }) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => go(id)}><Icon size={17} />{label}{id === 'matches' && unreadCount > 0 && <i className="badge">{unreadCount}</i>}</button>)}</nav>
+          <div className="sidebar-foot">{geo === 'on' ? 'LIFESTYLE MATCHING ON' : 'LIFESTYLE MATCHING OFF'}<br />V9.3</div>
         </aside>
         <main className="content">
           {error && <p className="error banner" onClick={() => setError('')} title="Dismiss">{error}</p>}
-          {editing === 'profile' && <ProfileBuilder initial={me} mode="edit" locationOn={geo === 'on'} requestLocation={requestLocation} onDone={d => finishBuild(d)} onCancel={() => setEditing(null)} saving={saving} />}
-          {editing === 'quiz' && <Calibration onBack={() => setEditing(null)} onDone={a => finishBuild(me, a)} />}
+          {editing === 'profile' && <ProfileBuilder initial={me} mode="edit" locationOn={geo === 'on'} requestLocation={() => setWantLocation(true)} onDone={d => finishBuild(d)} onCancel={() => setEditing(null)} saving={saving} />}
+          {editing === 'quiz' && <QuizIntro onBack={() => setEditing(null)} onDone={a => finishBuild(me, a)} />}
 
-          {!editing && tab === 'explore' && <Explore me={meView} here={here} people={allPeople} places={allPlaces} onOpen={setSheet} note={sampleNote} />}
+          {!editing && tab === 'swipe' && <Discover me={me} candidates={candidates} onSwipe={handleSwipe} loading={!peopleLoaded} note={sampleNote} />}
 
-          {!editing && tab === 'places' && (activeRoom
-            ? <ChatView meUid={me.uid} messages={activeRoom.sample ? sampleMsgs[activeRoom.id] ?? [] : messages} onSend={sendRoom} onBack={() => setRoomId(null)} showNames placeholder={`Message everyone at ${activeRoom.name}`}
-                header={<><span className="room-emoji">{activeRoom.emoji}</span><div><b>{activeRoom.name}</b><small>{distanceLabel(here ? metres(here, activeRoom.loc) : null)} · {roomPeople.length} here now{activeRoom.sample ? ' · SAMPLE' : ''}</small></div></>}
-                empty={<><span className="room-emoji big">{activeRoom.emoji}</span><b>{activeRoom.name} room</b><span className="muted">Anyone on Pulse can read and post here. Say what you&apos;re up to!</span></>}
-                starters={['Anyone here right now?', 'Is it crowded at the moment?', 'Saving a seat — who wants to join?']} />
-            : <Places me={meView} here={here} places={allPlaces} people={[...allPeople, meView]} onOpenRoom={id => { setChatId(null); setRoomId(id) }} onCheckIn={checkIn} onCreate={addPlace} />)}
-
-          {!editing && tab === 'chats' && (activeChat
-            ? <ChatView meUid={me.uid} messages={activeChat.sample ? sampleMsgs[activeChat.id] ?? [] : messages} onSend={sendDirect} onBack={() => setChatId(null)} placeholder={`Message ${activeChat.members[otherOf(activeChat, me.uid)]?.name ?? ''}`}
-                header={(() => { const o = activeChat.members[otherOf(activeChat, me.uid)]; return <><Avatar name={o?.name} photoURL={o?.photoURL} hue={o?.hue ?? 0} size={38} /><button className="chat-title" onClick={() => chatOther && setSheet(chatOther)}><b>{o?.name}</b><small>{chatOther ? `${chatOther.program} · ${distanceLabel(here && chatOther.loc ? metres(here, chatOther.loc) : null)}` : 'Chat'}{activeChat.sample ? ' · SAMPLE' : ''}</small></button>{chatOther && <Ring value={compatibility(me.vector, chatOther.vector)} size={40} />}</> })()}
-                empty={<><b>Start the conversation</b><span className="muted">Pulse picked these openers from what you have in common:</span></>}
-                starters={directStarters(me, chatOther)} />
-            : <ChatList me={me} chats={allChats} people={byUid} onOpen={id => { setRoomId(null); setChatId(id) }} />)}
+          {!editing && tab === 'matches' && (active
+            ? <ChatView meUid={me.uid} messages={active.sample ? sampleMsgs[active.id] ?? [] : messages} hasMore={!active.sample && hasMore} onLoadMore={() => setMsgCount(c => c + PAGE)} onSend={handleSend} onBack={() => setChatId(null)}
+                placeholder={`Message ${active.members[otherOf(active, me.uid)]?.name ?? ''}`}
+                header={(() => { const o = active.members[otherOf(active, me.uid)]; return <><Avatar name={o?.name} photoURL={o?.photoURL} hue={o?.hue ?? 0} size={38} /><button className="chat-title" onClick={() => other && setViewing(other)}><b>{o?.name}</b><small>{other ? `${other.program} · ${other.year}` : 'Matched'}{active.sample ? ' · SAMPLE' : ''} · view profile</small></button>{other && <Ring value={fit(me, other).score} size={40} />}</> })()}
+                banner={<div className="chat-id-banner subtle"><span>Only you two can see this chat</span><button className="ghost-button" onClick={async () => { if (active.sample) setSampleMatches(ms => ms.filter(m => m.id !== active.id)); else await unmatch(active.id).catch(() => {}); setChatId(null) }}>Unmatch</button></div>}
+                footer={active.status === 'closed' ? <div className="composer closed">This conversation was closed.</div> : undefined}
+                empty={<><b>You matched with {active.members[otherOf(active, me.uid)]?.name}</b><span className="muted">Pulse picked these openers from what you have in common:</span></>}
+                starters={matchStarters(me, other)} />
+            : <Inbox me={me} matches={allMatches} people={byUid} lastRead={lastRead} onOpen={openChat} />)}
 
           {!editing && tab === 'profile' && (
             <section className="profile-view">
               <div className="discover-head"><div><span className="panel-kicker">YOUR PROFILE</span><h2>How others <em>see you</em></h2></div><button className="secondary-button" onClick={() => setEditing('profile')}><Pencil size={14} /> Edit</button></div>
               <div className="sheet inline">
-                <div className="sheet-head"><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={72} ring /><div><h3>{me.name}</h3><span>{me.program} · {me.year}</span><small className="where"><MapPin size={12} /> {me.loc ? 'Location shared (~100 m)' : 'Location hidden'}</small></div></div>
+                <div className="sheet-head"><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={72} ring /><div><h3>{me.name}, {me.age}</h3><span>{me.program} · {me.year}</span></div></div>
+                <span className="tag">{INTENT_LABEL[me.intent] ?? 'Open to see'}</span>{myTags.map(t => <span key={t} className="tag soft"> {t}</span>)}
                 {me.status && <div className="status-bubble">“{me.status}”</div>}
                 {me.bio && <p>{me.bio}</p>}
+                {me.prompts?.filter(p => p.a).map(p => <div className="prompt-card" key={p.q}><small>{p.q}</small><b>{p.a}</b></div>)}
                 <h4>Open to</h4><Chips items={me.openTo} />
                 <h4>Interests</h4><Chips items={me.interests} />
               </div>
-              <h4>Vibe profile <button className="link-button" onClick={() => setEditing('quiz')}>Retake quiz</button></h4>
-              <Dossier vector={me.vector} />
+              <h4>Personality <button className="link-button" onClick={() => setEditing('quiz')}>Retake quiz</button></h4>
+              <TypeCard jung={jungOf(me)} />
+              {wantLocation && <p className="muted small">{myTags.length ? `From your daily rhythm: ${myTags.join(' · ')}.` : 'Pulse is still learning your daily rhythm — this takes a few days of normal use.'}</p>}
+              <TraitDetails vector={me.vector} code={typeInfo(jungOf(me)).code} />
             </section>
           )}
 
           {!editing && tab === 'settings' && (
             <section className="panel">
               <span className="panel-kicker">SETTINGS</span><h2>Privacy &amp; <em>account</em></h2>
-              <div className="setting"><div><b>Share my location</b><span>{geo === 'denied' ? 'Your browser blocked location. Allow it in the site settings, then turn this on again.' : 'Rounded to ~100 m and shown to others only as a rough distance. Updates while the app is open.'}</span></div><button className={`toggle${wantLocation ? ' on' : ''}`} onClick={() => { const v = !wantLocation; setWantLocation(v); if (!v) { setHere(null); updateLocation(me.uid, null, null).catch(() => {}); setMe({ ...me, loc: null, placeId: null }) } }} aria-pressed={wantLocation}><i /></button></div>
-              <div className="setting"><div><b>Show me on Explore</b><span>Turn off to browse invisibly. Existing chats stay open.</span></div><button className={`toggle${me.visible ? ' on' : ''}`} onClick={() => updateMe({ visible: !me.visible })} aria-pressed={me.visible}><i /></button></div>
-              <div className="setting"><div><b>Sample people &amp; spots</b><span>Fictional previews placed around you while campus is quiet. Never stored in Firestore.</span></div><button className={`toggle${useSamples ? ' on' : ''}`} onClick={() => setUseSamples(!useSamples)} aria-pressed={useSamples}><i /></button></div>
-              <div className="setting"><div><b>Clear sample chats</b><span>Removes sample conversations and check-ins on this device.</span></div><button className="secondary-button" onClick={() => { setSampleChats([]); setSampleMsgs({}); setSampleHere(null) }}>Clear</button></div>
+              <div className="setting"><div><b>Lifestyle matching</b><span>{geo === 'denied' ? 'Your browser blocked location. Allow it in site settings, then turn this on again.' : 'Uses your location in the background to learn your daily rhythm for better matches. Your location is never shown or shared — only lifestyle hints like “night owl”.'}</span></div><button className={`toggle${wantLocation ? ' on' : ''}`} onClick={() => { const v = !wantLocation; setWantLocation(v); if (!v) { clearTrack(); updateSignals(me.uid, null, null).catch(() => {}); setMe({ ...me, nature: null, area: null }) } }} aria-pressed={wantLocation}><i /></button></div>
+              <div className="setting"><div><b>Show me in Swipe</b><span>Turn off to pause. Your matches and chats stay open.</span></div><button className={`toggle${me.visible ? ' on' : ''}`} onClick={() => updateMe({ visible: !me.visible })} aria-pressed={me.visible}><i /></button></div>
+              <div className="setting"><div><b>Sample people</b><span>Fictional previews while campus is quiet. Never stored in Firestore.</span></div><button className={`toggle${useSamples ? ' on' : ''}`} onClick={() => setUseSamples(!useSamples)} aria-pressed={useSamples}><i /></button></div>
+              <div className="setting"><div><b>Reset sample data</b><span>Clears sample swipes, matches and chats on this device.</span></div><button className="secondary-button" onClick={() => { setSampleSwiped([]); setSampleMatches([]); setSampleMsgs({}) }}>Reset</button></div>
               <div className="setting"><div><b>Sign out</b><span>Your profile stays saved to your Google account.</span></div><button className="secondary-button" onClick={() => signOut()}><LogOut size={14} /> Sign out</button></div>
             </section>
           )}
         </main>
       </div>
-      {sheet && <PersonSheet me={me} p={sheet} here={here} places={allPlaces} onClose={() => setSheet(null)} onChat={() => startChat(sheet)} />}
+      {viewing && (
+        <div className="sheet-backdrop" onClick={() => setViewing(null)}>
+          <div className="sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label={viewing.name}>
+            <button className="close-detail" onClick={() => setViewing(null)} aria-label="Close">✕</button>
+            <ProfileDetail me={me} p={viewing} f={fit(me, viewing)} />
+          </div>
+        </div>
+      )}
+      {celebrate && <MatchModal me={me} other={celebrate.other} onClose={() => setCelebrate(null)} onChat={() => { openChat(celebrate.matchId); setCelebrate(null) }} />}
+      {toast && <button className="toast" onClick={() => toast.matchId && openChat(toast.matchId)}>💬 {toast.text}</button>}
     </div>
   )
 }
-
