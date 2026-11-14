@@ -5,8 +5,8 @@ import './globals.css'
 const base = process.env.NEXT_PUBLIC_BASE_PATH || ''
 
 export const metadata: Metadata = {
-  title: 'VIT PULSE V9 — Meet people on your wavelength',
-  description: 'Personality-matched dating and friendships for VIT students.',
+  title: 'VIT PULSE V9 — Explore campus & chat',
+  description: 'See who is around on campus, find hangout spots, and chat.',
   generator: 'VIT PULSE',
   icons: {
     icon: [

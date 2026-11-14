@@ -259,3 +259,69 @@ button.chip:not(:disabled):hover{border-color:var(--accent)}
   .filters{grid-template-columns:1fr}
   .photo-row{align-items:flex-start}
 }
+
+/* ---- V9.1 explore + chat ---- */
+.status-dot.off{background:var(--muted);box-shadow:none}
+.view-toggle{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.view-toggle button{background:var(--panel);border:0;width:42px;height:38px;display:grid;place-items:center;color:var(--muted)}
+.view-toggle button.on{background:#ff5a7a1f;color:var(--accent)}
+.filter-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px;scrollbar-width:none}
+.filter-row .chip{flex:none}
+.radar{position:relative;width:min(100%,440px);aspect-ratio:1;margin:6px auto 0;border-radius:50%;background:radial-gradient(circle,#ff5a7a14,#161214 70%);border:1px solid var(--line);overflow:hidden}
+.radar-ring{position:absolute;border:1px dashed #ffffff1a;border-radius:50%;left:50%;top:50%;transform:translate(-50%,-50%)}
+.radar-ring.r1{width:31%;height:31%}.radar-ring.r2{width:61%;height:61%}.radar-ring.r3{width:92%;height:92%}
+.radar-sweep{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,#ff5a7a33,transparent 22%);animation:spin 5s linear infinite;pointer-events:none}
+.radar-n{position:absolute;top:6px;left:50%;transform:translateX(-50%);font:10px var(--mono);color:var(--muted)}
+.radar-scale{position:absolute;bottom:8px;right:50%;transform:translateX(50%);font:10px var(--mono);color:var(--muted)}
+.radar-me{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3}
+.radar-dot{position:absolute;transform:translate(-50%,-50%);border:0;background:none;padding:0;border-radius:50%;z-index:2;transition:transform .15s}
+.radar-dot:hover{transform:translate(-50%,-50%) scale(1.15)}
+.radar-dot.live .avatar-v9{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--green)}
+.radar-dot.out{opacity:.45}
+.radar-place{position:absolute;transform:translate(-50%,-50%);font-size:20px;filter:drop-shadow(0 2px 4px #000);z-index:1}
+.range-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:14px 0 4px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.segmented.small{margin:0}.segmented.small button{padding:7px 12px;font-size:12px;flex:none}
+.people-list{display:grid;margin-top:10px}
+.person-row{display:flex;align-items:center;gap:14px;background:none;border:0;border-bottom:1px solid var(--line);padding:14px 4px;text-align:left}
+.person-row:hover{background:var(--panel)}
+.person-row>div{flex:1;min-width:0}
+.person-row b{display:block;font-size:15px}
+.row-status{display:block;color:var(--ink);font-size:13px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.person-row small{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+.person-row em{font:600 12px var(--mono);color:var(--gold);font-style:normal}
+.avatar-wrap{position:relative;flex:none;display:inline-flex}
+.live-dot{position:absolute;right:0;bottom:0;width:13px;height:13px;border-radius:50%;background:var(--green);border:2px solid var(--bg)}
+.sheet-backdrop{position:fixed;inset:0;background:#000000a6;z-index:50;display:flex;align-items:flex-end;justify-content:center;animation:fade .2s}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:24px 24px 0 0;width:min(560px,100%);max-height:88vh;overflow-y:auto;padding:22px 20px 28px;animation:up .25s ease}
+.sheet.inline{border-radius:20px;animation:none;max-height:none}
+.sheet-head{display:flex;gap:16px;align-items:center}
+.sheet-head h3{margin:0;font-size:24px}
+.sheet-head div>span{display:block;color:var(--muted);font-size:14px;margin-top:2px}
+.where{display:flex;align-items:center;gap:4px;color:var(--green);font-size:12px;margin-top:6px}
+.status-bubble{background:var(--panel2);border-radius:16px;padding:12px 16px;margin:16px 0 4px;font-size:16px;font-weight:500}
+.vibe-box{display:flex;gap:14px;align-items:center;background:var(--panel2);border-radius:16px;padding:12px 14px;margin:14px 0}
+.vibe-box b{display:block;color:var(--gold)}.vibe-box span{display:block;color:var(--muted);font-size:13px;margin-top:3px}
+.add-place{display:grid;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin:12px 0}
+.add-place input{border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:12px 14px;font-size:15px;outline:0}
+.emoji-row{display:flex;flex-wrap:wrap;gap:6px}
+.emoji-row button{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-size:20px}
+.emoji-row button.on{border-color:var(--accent);background:#ff5a7a1f}
+.place-list{display:grid;gap:10px;margin-top:14px}
+.place-card{display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px}
+.place-card.here{border-color:var(--green);background:#7fd1a012}
+.place-emoji{font-size:30px;width:52px;height:52px;border-radius:14px;background:var(--panel2);display:grid;place-items:center;flex:none}
+.place-info{flex:1;min-width:0}
+.place-info b{display:block;font-size:15px}
+.place-info small{display:flex;align-items:center;gap:4px;color:var(--muted);font-size:12px;margin-top:4px}
+.stack{display:flex;margin-top:8px}.stack .avatar-v9{margin-right:-6px;box-shadow:0 0 0 2px var(--panel)}
+.place-actions{display:grid;gap:4px;justify-items:end}
+.place-actions .ghost-button{min-height:34px;font-size:13px}
+.room-emoji{font-size:26px}.room-emoji.big{font-size:56px}
+.msg-name{font-size:11px;color:var(--muted);margin:8px 0 2px 10px}
+.chat-title{background:none;border:0;text-align:left;padding:0;flex:1;min-width:0}
+.chat-title b{display:block}.chat-title small{color:var(--muted);font-size:12px}
+@media(max-width:760px){
+  .sidebar nav button{font-size:10px;padding:10px 4px}
+  .place-card{flex-wrap:wrap}.place-actions{grid-auto-flow:column;width:100%;justify-content:end}
+}
+.sample-tag.inline{display:inline-block!important;position:static;margin:0 0 0 8px;padding:2px 6px;font-size:9px;vertical-align:middle;width:auto}

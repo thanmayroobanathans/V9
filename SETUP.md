@@ -1,29 +1,31 @@
-# VIT PULSE V9 setup
+# VIT PULSE V9.1 setup
 
-V9 turns the V7 personality engine into a dating-app prototype:
+V9.1 is a campus **explore + chat** app built on the V7 personality engine (the dating features have been removed):
 
-- **Onboarding**: first name, age (18+), program/year, gender, who you want to see, what you're looking for, photo (Google photo or colour portrait), bio, 3–6 interests, two Hinge-style prompts, then the 36-question personality calibration.
-- **Discover**: a swipeable card deck (drag or use the buttons; swipe right to like, left to pass, up to super-like). Each card shows a compatibility ring, shared traits and a "why Pulse paired you" panel. Filters for age range and intent.
-- **Matches**: a match is only created when both people like each other, and an "It's a match" screen appears. Includes a list of new matches and conversations, and a live Firestore chat with icebreakers suggested from shared traits. Either person can unmatch.
-- **Profile**: preview your card as others see it, edit your profile, and retake the quiz.
-- **Settings**: pause discovery, hide your campus signal, sample-profile preview mode, sign out.
+- **Profile**: name, program/year, photo (Google photo or colour avatar), short bio, a "what I'm up to" status, interests, and what you are open to (study buddy, food runs, sports, project team…), then the 36-question vibe quiz.
+- **Explore**: a live radar of people around you (500 m / 1 km / 3 km) plus a list sorted by distance, with filters for "active now" and "open to". Tap someone to see their status, vibe %, shared interests, and say hi.
+- **Places**: hangout spots near you. Add the spot you're at, check in when you're within ~250 m (you're checked out automatically when you walk away), see who's there now, and talk in each spot's public room.
+- **Chats**: message anyone directly, with icebreakers picked from what you have in common.
+- **Settings**: share location on/off, show me on Explore on/off, sample previews, sign out.
+
+### Location & privacy
+Location is read only while the app is open and only after you turn it on. It is rounded to 3 decimals (about 110 m) **before** it is saved, and other people only ever see a rough label such as "~5 min walk". No precise coordinates are stored.
 
 ## Firebase
 
 1. Enable Authentication → Google and add your deployment domain under Authentication → Settings → Authorized domains.
-2. Create a Firestore database and **deploy the updated `firestore.rules`**. V9 needs the new `publicProfiles`, `connections`, `matches` and `messages` rules.
-3. Firebase may ask for a composite index the first time Discover or chat runs. If it does, follow the link in the browser console error.
+2. Create a Firestore database and **deploy the updated `firestore.rules`**. V9.1 needs the new `publicProfiles`, `chats` and `places` rules.
+3. Firebase may ask for a composite index the first time Explore, Places or chat runs. If it does, follow the link in the browser console error.
 
 ## Data model
 
 | Path | Contents | Who can read |
 | --- | --- | --- |
-| `users/{uid}` (+ `results`, `location`) | private profile, quiz results, precise GPS | owner only |
-| `publicProfiles/{uid}` | card data + personality vector, coarse campus signal. No email, no coordinates | any signed-in user |
-| `connections/{from}_{to}` | like / super / pass | sender and recipient |
-| `matches/{a}_{b}` | members, last message, status | the two members; creation is checked against both likes in the rules |
-| `matches/{id}/messages` | chat messages | the two members |
+| `users/{uid}` (+ `results`) | private profile and quiz results | owner only |
+| `publicProfiles/{uid}` | card data, vibe vector, coarse location, current place | any signed-in user |
+| `chats/{a}_{b}` + `messages` | direct conversations | the two members |
+| `places/{id}` + `messages` | hangout spots and their public rooms | any signed-in user |
 
-## Sample profiles
+## Sample people and spots
 
-When no other students exist yet, Discover shows 10 fictional profiles labelled **SAMPLE** so the full flow (swipe → match → chat) can be demoed. They live only in the browser (localStorage) and are never written to Firestore. You can turn them off in Settings.
+When no other students are online, Explore and Places show 10 fictional people and 4 spots labelled **SAMPLE**, placed around your location, so the full flow can be demoed. They live only in the browser (localStorage) and are never written to Firestore. You can turn them off in Settings.
