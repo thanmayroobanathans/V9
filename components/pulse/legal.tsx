@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ALLOWED_DOMAINS, GRIEVANCE, OPERATOR, POLICY_UPDATED } from '@/lib/config'
+import { ALLOWED_DOMAIN, GRIEVANCE, OPERATOR, POLICY_UPDATED } from '@/lib/config'
 import { Page } from './people'
 
 const grievanceLine = GRIEVANCE.email
@@ -31,7 +31,7 @@ function Terms() {
 
     <h4>1. Eligibility</h4>
     <ul>
-      <li>You must be at least 18 years old and a current VIT student with a valid VIT student email ({ALLOWED_DOMAINS.map(d => '@' + d).join(', ')}).</li>
+      <li>You must be at least 18 years old and a current VIT student with a valid @{ALLOWED_DOMAIN} account.</li>
       <li>One account per person. Your profile must be about you and accurate.</li>
     </ul>
 
@@ -87,7 +87,7 @@ function Privacy() {
 
     <h4>1. Data we collect</h4>
     <ul>
-      <li><b>Account:</b> your name, VIT student email address and Google account ID (from Google Sign-In).</li>
+      <li><b>Account:</b> your name, @{ALLOWED_DOMAIN} email address and Google account ID (from Google Sign-In).</li>
       <li><b>Profile:</b> username, photo, age, gender, who you want to see, intent, program, year, bio, status, interests, prompts and the posts you create.</li>
       <li><b>Personality quiz:</b> your answers are turned into trait scores and a personality type.</li>
       <li><b>Activity:</b> likes, passes, follow requests, matches, post likes, messages and reports.</li>
