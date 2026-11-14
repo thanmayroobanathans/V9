@@ -8,11 +8,12 @@ service cloud.firestore {
     // HELPERS
     // =====================================================
 
-    // Only verified @vitstudent.ac.in Google accounts can use the app.
+    // Only verified VIT student emails can use the app
+    // (@vitstudent.ac.in — Vellore & Chennai, @vitapstudent.ac.in — AP, @vitbhopal.ac.in — Bhopal).
     function signedIn() {
       return request.auth != null
         && request.auth.token.email_verified == true
-        && request.auth.token.email.lower().matches('.*@vitstudent[.]ac[.]in$');
+        && request.auth.token.email.lower().matches('.*@(vitstudent|vitapstudent|vitbhopal)[.]ac[.]in$');
     }
 
     function self(uid) {
