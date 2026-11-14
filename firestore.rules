@@ -8,119 +8,129 @@ service cloud.firestore {
     // HELPERS
     // =====================================================
 
+    // Only verified @vitstudent.ac.in Google accounts can use the app.
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower().matches('.*@vitstudent[.]ac[.]in$');
     }
 
     function self(uid) {
       return signedIn() && request.auth.uid == uid;
     }
 
+    // viewer has an ACCEPTED follow of owner
+    function follows(viewer, owner) {
+      let f = /databases/$(database)/documents/follows/$(viewer + '_' + owner);
+      return exists(f) && get(f).data.status == 'accepted';
+    }
+
+    function canSeePrivate(owner) {
+      return self(owner) || (signedIn() && follows(request.auth.uid, owner));
+    }
+
     function isMember(matchId) {
       return signedIn()
-        && request.auth.uid in
-        get(
-          /databases/$(database)/documents/matches/$(matchId)
-        ).data.memberUids;
+        && request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.memberUids;
     }
 
 
     // =====================================================
-    // USER DATA
+    // PRIVATE USER DATA — users/{uid}
     // =====================================================
 
     match /users/{uid} {
 
-      // User's own profile/root document
-      allow read, create, update:
+      allow read, create, update, delete:
         if self(uid);
 
-      allow delete:
-        if false;
-
-
-      // ===================================================
-      // PERSONALITY RESULTS
-      // users/{uid}/results/{resultId}
-      // ===================================================
-
       match /results/{resultId} {
-
-        allow read, create, update:
-          if self(uid);
-
-        allow delete:
-          if false;
+        allow read, create, update, delete: if self(uid);
       }
-
-
-      // ===================================================
-      // QUESTIONNAIRE SESSIONS
-      // users/{uid}/sessions/{sessionId}
-      // ===================================================
-
-      match /sessions/{sessionId} {
-
-        allow read, create, update:
-          if self(uid);
-
-        allow delete:
-          if false;
-      }
-
-
-      // ===================================================
-      // INDIVIDUAL RESPONSES
-      // users/{uid}/responses/{questionId}
-      // ===================================================
-
-      match /responses/{questionId} {
-
-        allow read, create, update:
-          if self(uid);
-
-        allow delete:
-          if false;
-      }
-
-
-      // ===================================================
-      // PRECISE GPS LOCATION
-      // users/{uid}/location/{locationId}
-      // ===================================================
-
-      match /location/{locationId} {
-
-        // Only the owner can access precise coordinates.
-        allow read, create, update:
-          if self(uid);
-
-        allow delete:
-          if false;
-      }
-
-
-      // ===================================================
-      // USER PREFERENCES
-      // users/{uid}/preferences/{preferenceId}
-      // ===================================================
 
       match /preferences/{preferenceId} {
+        allow read, create, update, delete: if self(uid);
+      }
 
-        allow read, create, update:
-          if self(uid);
+      match /sessions/{sessionId} {
+        allow read, create, update, delete: if self(uid);
+      }
+
+      match /responses/{questionId} {
+        allow read, create, update, delete: if self(uid);
+      }
+
+      match /location/{locationId} {
+        allow read, create, update, delete: if self(uid);
+      }
+
+      // ---------------------------------------------------
+      // POSTS — only the owner and accepted followers
+      // ---------------------------------------------------
+      match /posts/{postId} {
+
+        allow read:
+          if canSeePrivate(uid);
+
+        allow create:
+          if self(uid)
+          && request.resource.data.uid == uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 500
+          && (request.resource.data.image == null
+              || (request.resource.data.image is string && request.resource.data.image.size() < 400000));
+
+        allow update:
+          if false;
 
         allow delete:
-          if false;
+          if self(uid);
+
+        match /likes/{likerUid} {
+
+          allow read:
+            if canSeePrivate(uid);
+
+          allow create:
+            if signedIn()
+            && likerUid == request.auth.uid
+            && canSeePrivate(uid);
+
+          allow delete:
+            if signedIn() && (likerUid == request.auth.uid || self(uid));
+
+          allow update:
+            if false;
+        }
       }
     }
 
 
     // =====================================================
-    // PUBLIC PROFILES
-    // publicProfiles/{uid} — what other signed-in students see.
-    // No email and no coordinates of any kind: location is only used on the
-    // device to derive lifestyle features (`nature`) and a ~1.2 km `area` code.
+    // USERNAMES — usernames/{handle} → { uid }
+    // =====================================================
+
+    match /usernames/{handle} {
+
+      allow read:
+        if signedIn();
+
+      allow create:
+        if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && handle.matches('^[a-z0-9._]{3,20}$');
+
+      allow delete:
+        if signedIn() && resource.data.uid == request.auth.uid;
+
+      allow update:
+        if false;
+    }
+
+
+    // =====================================================
+    // PUBLIC PROFILES — the swipe card
+    // No email, no coordinates. Username must be one the user owns.
     // =====================================================
 
     function validSignals(d) {
@@ -137,6 +147,9 @@ service cloud.firestore {
       allow create, update:
         if self(uid)
         && request.resource.data.uid == uid
+        && request.resource.data.username is string
+        && exists(/databases/$(database)/documents/usernames/$(request.resource.data.username))
+        && get(/databases/$(database)/documents/usernames/$(request.resource.data.username)).data.uid == uid
         && request.resource.data.age is int
         && request.resource.data.age >= 18
         && request.resource.data.name is string
@@ -144,6 +157,8 @@ service cloud.firestore {
         && request.resource.data.bio.size() <= 200
         && request.resource.data.status.size() <= 80
         && request.resource.data.vector.size() == 11
+        && (request.resource.data.photoURL == null
+            || (request.resource.data.photoURL is string && request.resource.data.photoURL.size() < 80000))
         && validSignals(request.resource.data)
         && !('loc' in request.resource.data)
         && !('email' in request.resource.data)
@@ -156,13 +171,44 @@ service cloud.firestore {
 
 
     // =====================================================
-    // SWIPES (like / super / pass)
-    // connections/{fromUid}_{toUid}
+    // FOLLOW REQUESTS — follows/{fromUid}_{toUid}
+    // Visible only to the two people involved.
+    // =====================================================
+
+    match /follows/{followId} {
+
+      allow read:
+        if signedIn()
+        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+
+      allow create:
+        if signedIn()
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.toUid != request.auth.uid
+        && followId == request.auth.uid + '_' + request.resource.data.toUid
+        && request.resource.data.status == 'pending';
+
+      // Only the person being followed can accept.
+      allow update:
+        if signedIn()
+        && resource.data.toUid == request.auth.uid
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'accepted'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt']);
+
+      // Either side can cancel / remove.
+      allow delete:
+        if signedIn()
+        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+    }
+
+
+    // =====================================================
+    // SWIPES — connections/{fromUid}_{toUid}
     // =====================================================
 
     match /connections/{connectionId} {
 
-      // resource == null lets a client check for a reciprocal like without leaking anything.
       allow read:
         if signedIn()
         && (
@@ -183,8 +229,8 @@ service cloud.firestore {
 
 
     // =====================================================
-    // MATCHES — matches/{uidA}_{uidB} (uids sorted)
-    // Only created when both people really liked each other.
+    // CHATS — matches/{uidA}_{uidB} (uids sorted)
+    // Open after a mutual like OR an accepted follow request.
     // =====================================================
 
     function liked(fromUid, toUid) {
@@ -203,8 +249,12 @@ service cloud.firestore {
         && request.auth.uid in request.resource.data.memberUids
         && request.resource.data.memberUids.size() == 2
         && matchId == request.resource.data.memberUids[0] + '_' + request.resource.data.memberUids[1]
-        && liked(request.resource.data.memberUids[0], request.resource.data.memberUids[1])
-        && liked(request.resource.data.memberUids[1], request.resource.data.memberUids[0]);
+        && (
+          (liked(request.resource.data.memberUids[0], request.resource.data.memberUids[1])
+            && liked(request.resource.data.memberUids[1], request.resource.data.memberUids[0]))
+          || follows(request.resource.data.memberUids[0], request.resource.data.memberUids[1])
+          || follows(request.resource.data.memberUids[1], request.resource.data.memberUids[0])
+        );
 
       allow update:
         if signedIn()
@@ -237,32 +287,16 @@ service cloud.firestore {
 
 
     // =====================================================
-    // PLACE VIBES
+    // REPORTS — grievance mechanism (write-only for users)
     // =====================================================
 
-    match /placeVibes/{placeId} {
-
-      allow read:
-        if signedIn();
+    match /reports/{reportId} {
 
       allow create:
-        if signedIn();
-
-      // Prevent users from modifying/deleting
-      // previously submitted research signals.
-      allow update, delete:
-        if false;
-    }
-
-
-    // =====================================================
-    // RESEARCH AGGREGATES
-    // =====================================================
-
-    match /aggregateFingerprints/{fingerprintId} {
-
-      allow create:
-        if signedIn();
+        if signedIn()
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.reason is string
+        && request.resource.data.detail.size() <= 1000;
 
       allow read, update, delete:
         if false;

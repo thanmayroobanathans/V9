@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { onAuthStateChanged, type User } from 'firebase/auth'
-import { ArrowRight, Flame, LogOut, MessageSquare, Pencil, RefreshCw, Settings, UserRound, X } from 'lucide-react'
+import { ArrowRight, Flame, LogOut, MessageSquare, Pencil, RefreshCw, Search as SearchIcon, Settings, UserRound } from 'lucide-react'
 import { auth, firebaseConfigured, signInWithGoogle, signOut } from '@/lib/firebase'
 import { classify } from '@/lib/pulse-model'
 import { estimateTraits } from '@/lib/trait-kalman'
@@ -13,7 +13,7 @@ import { areaCode, clearTrack, computeNature, natureTags, record } from '@/lib/n
 import { saveProfile, saveResult } from '@/lib/firestore'
 import { SIGNAL, features, newLearner, pack, unpack, update, type LearnerState } from '@/lib/learner'
 import {
-  INTENT_LABEL, PROMPTS, loadMySwipes, loadPerson, loadTaste, saveTaste, pairId, savePerson, sendMessage, swipe, unmatch, updateSignals,
+  INTENT_LABEL, PROMPTS, loadMySwipes, loadPerson, loadTaste, saveTaste, acceptFollow, cancelFollow, claimUsername, deleteAccount, normaliseUsername, removeFollower, requestFollow, watchFollows, type Follow, pairId, savePerson, sendMessage, swipe, unmatch, updateSignals,
   watchMatches, watchMessages, watchPeople, type Match, type Message, type Person, type Swipe,
 } from '@/lib/social'
 import { samplePeople, sampleReply } from '@/lib/samples'
@@ -21,12 +21,15 @@ import { ProfileBuilder, QuizIntro, TraitDetails, TypeCard, type Draft } from '@
 import { Discover, ProfileDetail } from '@/components/pulse/discover'
 import { ChatView, Inbox, MatchModal, isUnread, matchStarters, otherOf } from '@/components/pulse/chat'
 import { Avatar, Chips, Ring } from '@/components/pulse/ui'
+import { FollowLists, PersonPage, Posts, ReportForm, Requests, Search, type FollowState } from '@/components/pulse/people'
+import { Legal } from '@/components/pulse/legal'
+import { isAllowedEmail, ALLOWED_DOMAIN } from '@/lib/config'
 
-type Tab = 'swipe' | 'matches' | 'profile' | 'settings'
+type Tab = 'swipe' | 'search' | 'matches' | 'profile' | 'settings'
 type Stage = 'gate' | 'loading' | 'build' | 'reveal' | 'app'
 type Geo = 'off' | 'asking' | 'on' | 'denied'
 
-const nav = [{ id: 'swipe', label: 'Swipe', icon: Flame }, { id: 'matches', label: 'Matches', icon: MessageSquare }, { id: 'profile', label: 'Profile', icon: UserRound }, { id: 'settings', label: 'Settings', icon: Settings }] as const
+const nav = [{ id: 'swipe', label: 'Swipe', icon: Flame }, { id: 'search', label: 'Search', icon: SearchIcon }, { id: 'matches', label: 'Chats', icon: MessageSquare }, { id: 'profile', label: 'Profile', icon: UserRound }, { id: 'settings', label: 'Settings', icon: Settings }] as const
 const SIGNAL_MS = 10 * 60 * 1000 // publish lifestyle signals at most every 10 minutes
 const PAGE = 100
 
@@ -37,7 +40,7 @@ function useLocal<T>(key: string, init: T): [T, (v: T | ((x: T) => T)) => void] 
   return [v, set]
 }
 // Profiles calibrated before the Kalman engine (no `certainty`) recalibrate once so everyone is scored the same way.
-const isReady = (p: Person | null): p is Person => !!p && !!p.vector?.length && p.age >= 18 && !!p.gender && Array.isArray(p.openTo) && typeof p.certainty === 'number'
+const isReady = (p: Person | null): p is Person => !!p && !!p.username && !!p.vector?.length && p.age >= 18 && !!p.gender && Array.isArray(p.openTo) && typeof p.certainty === 'number'
 
 export default function Page() {
   const [user, setUser] = useState<User | null>(null)
@@ -50,7 +53,6 @@ export default function Page() {
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState<'profile' | 'quiz' | null>(null)
   const [agreed, setAgreed] = useState(false)
-  const [showTerms, setShowTerms] = useState(false)
   const uid = user?.uid ?? 'anon'
 
   // ---------- background location → lifestyle signals ----------
@@ -66,6 +68,11 @@ export default function Page() {
   const [matches, setMatches] = useState<Match[]>([])
   const [swiped, setSwiped] = useState<Set<string>>(new Set())
   const [peopleLoaded, setPeopleLoaded] = useState(false)
+  const [incoming, setIncoming] = useState<Follow[]>([])
+  const [outgoing, setOutgoing] = useState<Follow[]>([])
+  const [personView, setPersonView] = useState<Person | null>(null)
+  const [legal, setLegal] = useState<'terms' | 'privacy' | null>(null)
+  const [reporting, setReporting] = useState(false)
   const [celebrate, setCelebrate] = useState<{ other: Person; matchId: string } | null>(null)
   const [chatId, setChatId] = useState<string | null>(null)
   const [viewing, setViewing] = useState<Person | null>(null)
@@ -91,6 +98,7 @@ export default function Page() {
     return onAuthStateChanged(auth, async u => {
       setUser(u)
       if (!u) { setStage('gate'); setMe(null); return }
+      if (!isAllowedEmail(u.email)) { await signOut(); setError(`Use your @${ALLOWED_DOMAIN} account`); return }
       setStage('loading')
       try { const p = await loadPerson(u.uid); if (isReady(p)) { setMe(p); setStage('app') } else { setPartial(p); setStage('build') } }
       catch (e) { setError(e instanceof Error ? e.message : 'Could not load your profile'); setStage('build') }
@@ -107,6 +115,7 @@ export default function Page() {
         'auth/popup-closed-by-user': 'Sign-in cancelled.', 'auth/cancelled-popup-request': 'Sign-in cancelled.',
         'auth/unauthorized-domain': `This domain isn't authorised — add ${window.location.hostname} in Firebase → Authentication → Settings.`,
         'auth/network-request-failed': 'Network error — check your connection and retry.',
+        'auth/domain': `Only @${ALLOWED_DOMAIN} accounts can sign in.`,
       }
       setError(msg[code] ?? `Sign-in failed${code ? ` (${code})` : ''}`)
     }
@@ -137,7 +146,7 @@ export default function Page() {
 
   // ---------- profile ----------
   const blankDraft = useMemo<Draft>(() => ({
-    uid: user?.uid ?? '', name: user?.displayName?.split(' ')[0] ?? '', age: 0, gender: 'woman', seeking: 'men', intent: 'open', program: '', year: '2nd year', bio: '', status: '',
+    uid: user?.uid ?? '', username: normaliseUsername((user?.email ?? '').split('@')[0]).replace(/^[._]+/, ''), name: user?.displayName?.split(' ')[0] ?? '', age: 0, gender: 'woman', seeking: 'men', intent: 'open', program: '', year: '2nd year', bio: '', status: '',
     interests: [], openTo: [], prompts: [{ q: PROMPTS[0], a: '' }, { q: PROMPTS[2], a: '' }], photoURL: user?.photoURL ?? null, hue: 210, nature: null, area: null, activeAt: 0, visible: true,
     ...(partial ? Object.fromEntries(Object.entries(partial).filter(([k, v]) => v !== undefined && v !== null && v !== '' && !['loc', 'locAt', 'placeId'].includes(k))) : {}),
   } as Draft), [user, partial])
@@ -156,6 +165,10 @@ export default function Page() {
     finally { setSaving(false) }
   }
   async function finishBuild(d: Draft, answers?: number[]) {
+    if (d.username !== me?.username) {
+      try { await claimUsername(user!.uid, d.username, me?.username ?? partial?.username) }
+      catch (e) { setError(e instanceof Error ? e.message : 'Username not available'); return }
+    }
     // A full-covariance Kalman filter reads the 36 answers into 11 traits.
     const est = answers ? estimateTraits(answers) : null
     const vector = est ? est.vector : (me?.vector ?? d.vector ?? [])
@@ -178,6 +191,7 @@ export default function Page() {
     const subs = [
       watchPeople(p => { setPeople(p); setPeopleLoaded(true) }, e => { setPeopleLoaded(true); setError(`People unavailable — ${e.message}`) }),
       watchMatches(user.uid, setMatches, e => setError(`Matches unavailable — ${e.message}`)),
+      watchFollows(user.uid, (i, o) => { setIncoming(i); setOutgoing(o) }, e => setError(`Follows unavailable — ${e.message}`)),
     ]
     return () => subs.forEach(u => u())
   }, [stage, user])
@@ -244,6 +258,17 @@ export default function Page() {
     try { const id = await swipe(me, p, kind); if (id) setCelebrate({ other: p, matchId: id }) }
     catch (e) { setError(`Not saved — ${e instanceof Error ? e.message : 'write failed'}`) }
   }
+  const followStateOf = (uid: string): FollowState => { const f = outgoing.find(x => x.toUid === uid); return !f ? 'none' : f.status === 'accepted' ? 'following' : 'requested' }
+  const chatWith = (uid: string) => allMatches.find(m => m.status === 'open' && m.memberUids.includes(uid))?.id ?? null
+  async function follow(p: Person) { if (!me) return; try { await requestFollow(me, p) } catch (e) { setError(e instanceof Error ? e.message : 'Could not send request') } }
+  async function unfollow(uid: string) { if (!me) return; await cancelFollow(me.uid, uid).catch(() => {}) }
+  async function accept(f: Follow) { if (!me) return; try { await acceptFollow(me, f) } catch (e) { setError(e instanceof Error ? e.message : 'Could not accept') } }
+  async function removeAccount() {
+    if (!me) return
+    const typed = window.prompt(`Delete your account permanently? Type your username (${me.username}) to confirm.`)
+    if (typed?.trim().toLowerCase() !== me.username) return
+    try { await deleteAccount(me.uid, me.username); clearTrack(); await signOut() } catch (e) { setError(e instanceof Error ? e.message : 'Could not delete account') }
+  }
   function openChat(id: string) { setTab('matches'); setEditing(null); setChatId(id); setToast(null) }
   async function handleSend(text: string) {
     if (!active || !me) return
@@ -264,13 +289,13 @@ export default function Page() {
       <div className="gate-inner">
         <div className="eyebrow"><span className="status-dot" /> VIT PULSE / V9</div>
         <h1>Swipe.<br /><em>Match. Chat.</em></h1>
-        <p className="muted">Meet VIT students who fit you.</p>
-        <label className="agree"><input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} /><span>I&apos;m 18+ and agree to the <button type="button" className="link-button inline" onClick={() => setShowTerms(true)}>Terms &amp; Privacy Policy</button></span></label>
+        <p className="muted">For VIT students. Sign in with your @{ALLOWED_DOMAIN} account.</p>
+        <label className="agree"><input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} /><span>I&apos;m 18+, a VIT student, and agree to the <button type="button" className="link-button inline" onClick={() => setLegal('terms')}>Terms of Use</button> and <button type="button" className="link-button inline" onClick={() => setLegal('privacy')}>Privacy Policy</button></span></label>
         <button className="primary-button wide" disabled={!agreed} onClick={login}>Continue with Google <ArrowRight size={16} /></button>
         {!firebaseConfigured && <p className="config-note">Firebase configuration required.</p>}
         {error && <p className="error">{error}</p>}
       </div>
-      {showTerms && <Terms onClose={() => setShowTerms(false)} />}
+      {legal && <Legal initial={legal} onClose={() => setLegal(null)} />}
     </main>
   )
   if (stage === 'loading') return <main className="gate"><div className="gate-inner center"><RefreshCw className="spin" /><p className="muted">Loading…</p></div></main>
@@ -302,23 +327,25 @@ export default function Page() {
           {editing === 'profile' && <ProfileBuilder initial={me} mode="edit" locationOn={geo === 'on'} requestLocation={() => setWantLocation(true)} onDone={d => finishBuild(d)} onCancel={() => setEditing(null)} saving={saving} />}
           {editing === 'quiz' && <QuizIntro onBack={() => setEditing(null)} onDone={a => finishBuild(me, a)} />}
 
+          {!editing && tab === 'search' && <Search meUid={me.uid} onOpen={setPersonView} />}
           {!editing && tab === 'swipe' && <Discover me={me} candidates={candidates} taste={taste} onSwipe={handleSwipe} loading={!peopleLoaded} />}
 
           {!editing && tab === 'matches' && (active
             ? <ChatView meUid={me.uid} messages={active.sample ? sampleMsgs[active.id] ?? [] : messages} hasMore={!active.sample && hasMore} onLoadMore={() => setMsgCount(c => c + PAGE)} onSend={handleSend} onBack={() => setChatId(null)}
                 placeholder={`Message ${active.members[otherOf(active, me.uid)]?.name ?? ''}`}
-                header={(() => { const o = active.members[otherOf(active, me.uid)]; return <><Avatar name={o?.name} photoURL={o?.photoURL} hue={o?.hue ?? 0} size={38} /><button className="chat-title" onClick={() => other && setViewing(other)}><b>{o?.name}</b><small>{other ? `${other.program} · ${other.year}` : 'Matched'}{active.sample ? ' · SAMPLE' : ''}</small></button>{other && <Ring value={fit(me, other, taste).score} size={40} />}</> })()}
+                header={(() => { const o = active.members[otherOf(active, me.uid)]; return <><Avatar name={o?.name} photoURL={o?.photoURL} hue={o?.hue ?? 0} size={38} /><button className="chat-title" onClick={() => other && (other.sample ? setViewing(other) : setPersonView(other))}><b>{o?.name}</b><small>{other ? `${other.program} · ${other.year}` : 'Matched'}{active.sample ? ' · SAMPLE' : ''}</small></button>{other && <Ring value={fit(me, other, taste).score} size={40} />}</> })()}
                 banner={<div className="chat-id-banner subtle"><span /><button className="ghost-button" onClick={async () => { if (active.sample) setSampleMatches(ms => ms.filter(m => m.id !== active.id)); else await unmatch(active.id).catch(() => {}); setChatId(null) }}>Unmatch</button></div>}
                 footer={active.status === 'closed' ? <div className="composer closed">Chat closed</div> : undefined}
                 empty={<><b>You matched with {active.members[otherOf(active, me.uid)]?.name}</b><span className="muted">Say hi 👋</span></>}
                 starters={matchStarters(me, other)} />
-            : <Inbox me={me} matches={allMatches} people={byUid} lastRead={lastRead} onOpen={openChat} />)}
+            : <><Inbox me={me} matches={allMatches} people={byUid} lastRead={lastRead} onOpen={openChat} /><Requests incoming={incoming} onAccept={accept} onDecline={f => removeFollower(me.uid, f.fromUid).catch(() => {})} /></>)}
 
           {!editing && tab === 'profile' && (
             <section className="profile-view">
               <div className="discover-head"><div><h2>Your <em>profile</em></h2></div><button className="secondary-button" onClick={() => setEditing('profile')}><Pencil size={14} /> Edit</button></div>
               <div className="sheet inline">
-                <div className="sheet-head"><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={72} ring /><div><h3>{me.name}, {me.age}</h3><span>{me.program} · {me.year}</span></div></div>
+                <div className="sheet-head"><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={72} ring /><div><h3>{me.name}, {me.age}</h3><span>@{me.username} · {me.program} · {me.year}</span></div></div>
+                <FollowLists incoming={incoming} outgoing={outgoing} onRemoveFollower={f => removeFollower(me.uid, f.fromUid).catch(() => {})} onUnfollow={f => unfollow(f.toUid)} />
                 <span className="tag">{INTENT_LABEL[me.intent] ?? 'Open to see'}</span>{myTags.map(t => <span key={t} className="tag soft"> {t}</span>)}
                 {me.status && <div className="status-bubble">“{me.status}”</div>}
                 {me.bio && <p>{me.bio}</p>}
@@ -328,7 +355,9 @@ export default function Page() {
               </div>
               <h4>Personality <button className="link-button" onClick={() => setEditing('quiz')}>Retake</button></h4>
               <TypeCard jung={jungOf(me)} />
-                      <TraitDetails vector={me.vector} code={typeInfo(jungOf(me)).code} />
+              <TraitDetails vector={me.vector} code={typeInfo(jungOf(me)).code} />
+              <h4>Posts</h4>
+              <Posts owner={me.uid} me={me.uid} editable />
             </section>
           )}
 
@@ -339,7 +368,11 @@ export default function Page() {
               <div className="setting"><div><b>Show me</b><span>Off pauses your profile</span></div><button className={`toggle${me.visible ? ' on' : ''}`} onClick={() => updateMe({ visible: !me.visible })} aria-pressed={me.visible}><i /></button></div>
               <div className="setting"><div><b>Sample profiles</b><span>Demo profiles</span></div><button className={`toggle${useSamples ? ' on' : ''}`} onClick={() => setUseSamples(!useSamples)} aria-pressed={useSamples}><i /></button></div>
               <div className="setting"><div><b>Reset demo</b><span /></div><button className="secondary-button" onClick={() => { setSampleSwiped([]); setSampleMatches([]); setSampleMsgs({}) }}>Reset</button></div>
-              <div className="setting"><div><b>Terms &amp; Privacy</b><span /></div><button className="secondary-button" onClick={() => setShowTerms(true)}>View</button></div>
+              <div className="setting"><div><b>Terms of Use</b><span /></div><button className="secondary-button" onClick={() => setLegal('terms')}>View</button></div>
+              <div className="setting"><div><b>Report a problem</b><span /></div><button className="secondary-button" onClick={() => setReporting(true)}>Report</button></div>
+              {reporting && <ReportForm me={me.uid} onClose={() => setReporting(false)} />}
+              <div className="setting"><div><b>Privacy Policy</b><span /></div><button className="secondary-button" onClick={() => setLegal('privacy')}>View</button></div>
+              <div className="setting danger"><div><b>Delete account</b><span>Removes your profile, posts and data</span></div><button className="secondary-button" onClick={removeAccount}>Delete</button></div>
               <div className="setting"><div><b>Sign out</b><span /></div><button className="secondary-button" onClick={() => signOut()}><LogOut size={14} /> Sign out</button></div>
             </section>
           )}
@@ -353,37 +386,13 @@ export default function Page() {
           </div>
         </div>
       )}
+      {personView && (
+        <PersonPage me={me} p={personView} followState={followStateOf(personView.uid)} followsMe={incoming.some(f => f.fromUid === personView.uid && f.status === 'accepted')} chatId={chatWith(personView.uid)}
+          onFollow={() => follow(personView)} onUnfollow={() => unfollow(personView.uid)} onMessage={id => { setPersonView(null); openChat(id) }} onClose={() => setPersonView(null)} />
+      )}
       {celebrate && <MatchModal me={me} other={celebrate.other} onClose={() => setCelebrate(null)} onChat={() => { openChat(celebrate.matchId); setCelebrate(null) }} />}
-      {showTerms && <Terms onClose={() => setShowTerms(false)} />}
+      {legal && <Legal initial={legal} onClose={() => setLegal(null)} />}
       {toast && <button className="toast" onClick={() => toast.matchId && openChat(toast.matchId)}>💬 {toast.text}</button>}
-    </div>
-  )
-}
-
-
-function Terms({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet terms" onClick={e => e.stopPropagation()} role="dialog" aria-label="Terms and Privacy Policy">
-        <button className="close-detail" onClick={onClose} aria-label="Close"><X size={18} /></button>
-        <h3>Terms &amp; Privacy</h3>
-        <h4>Using VIT Pulse</h4>
-        <ul>
-          <li>You must be 18 or older and a VIT student.</li>
-          <li>Be respectful. Harassment, hate speech, spam and fake profiles are not allowed and may lead to removal.</li>
-          <li>Matches and personality results are for fun and guidance only.</li>
-          <li>Profiles marked SAMPLE are fictional demo profiles.</li>
-        </ul>
-        <h4>Your data</h4>
-        <ul>
-          <li>We store your profile, quiz results, swipes, matches and messages in Google Firebase.</li>
-          <li>Other students see only your public profile. Your email is never shown.</li>
-          <li>If you turn on location, it is processed on your device to learn lifestyle patterns (like “night owl”). Your location is never shown to anyone, and no coordinates are stored.</li>
-          <li>Your swipes are used to personalise who you see.</li>
-          <li>You can hide your profile, turn off location, or sign out at any time in Settings.</li>
-        </ul>
-        <button className="primary-button wide" onClick={onClose}>Close</button>
-      </div>
     </div>
   )
 }

@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import { ArrowLeft, ArrowRight, Camera, ChevronDown, MapPin, Sparkles } from 'lucide-react'
-import { INTENT_LABEL, INTERESTS, OPEN_TO, PROMPTS, type Gender, type Intent, type Person, type PromptAnswer, type Seeking } from '@/lib/social'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowLeft, ArrowRight, Camera, Check, ChevronDown, MapPin, Upload } from 'lucide-react'
+import { INTENT_LABEL, INTERESTS, OPEN_TO, PROMPTS, USERNAME_RE, normaliseUsername, usernameOwner, type Gender, type Intent, type Person, type PromptAnswer, type Seeking } from '@/lib/social'
 import { FEATURES, QUESTIONS } from '@/lib/pulse-model'
 import { AXES, typeInfo, type Jung } from '@/lib/jung'
 import { Chips, Portrait, Segmented } from './ui'
+import { compressImage } from '@/lib/image'
 
 export type Draft = Omit<Person, 'vector' | 'archetype' | 'archetypeCode' | 'jung'> & { vector?: number[]; jung?: Jung }
 
@@ -18,10 +19,14 @@ export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onD
 }) {
   const [d, setD] = useState<Draft>(initial)
   const [step, setStep] = useState(0)
+  const [nameOk, setNameOk] = useState(!!initial.username && USERNAME_RE.test(initial.username))
+  const [photoErr, setPhotoErr] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+  const upload = async (f?: File) => { if (!f) return; setPhotoErr(''); try { const url = await compressImage(f, 256, 0.82, true); setD(x => ({ ...x, photoURL: url })) } catch (e) { setPhotoErr(e instanceof Error ? e.message : 'Could not use photo') } }
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD(x => ({ ...x, [k]: v }))
   const steps = mode === 'onboard' ? ['You', 'Card', 'Prompts', 'Location', 'Quiz'] : ['You', 'Card', 'Prompts', 'Location']
   const valid = [
-    d.name.trim().length > 0 && d.age >= 18 && d.age <= 40 && d.program.trim().length > 0,
+    nameOk && d.name.trim().length > 0 && d.age >= 18 && d.age <= 40 && d.program.trim().length > 0,
     d.interests.length >= 3 && d.openTo.length >= 1,
     d.prompts.filter(p => p.a.trim()).length >= 2,
     true,
@@ -37,6 +42,7 @@ export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onD
       <div className="steps">{steps.map((s, i) => <span key={s} className={i <= step ? 'on' : ''}>{s}</span>)}</div>
       {step === 0 && <>
         <h2>About <em>you</em></h2>
+        <UsernameField uid={d.uid} value={d.username} original={initial.username} onChange={(v, ok) => { set('username', v); setNameOk(ok) }} />
         <div className="field-row">
           <label className="field">First name<input value={d.name} maxLength={24} onChange={e => set('name', e.target.value)} /></label>
           <label className="field small">Age<input type="number" inputMode="numeric" min={18} max={40} value={d.age || ''} onChange={e => set('age', Number(e.target.value))} /></label>
@@ -57,8 +63,11 @@ export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onD
           <Portrait name={d.name} photoURL={d.photoURL} hue={d.hue} />
           <div>
             <b><Camera size={14} /> Photo</b>
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={e => { upload(e.target.files?.[0]); e.target.value = '' }} />
+            <button type="button" className="secondary-button upload" onClick={() => fileRef.current?.click()}><Upload size={14} /> Upload photo</button>
+            {photoErr && <p className="error">{photoErr}</p>}
             <div className="hue-row">
-              {initial.photoURL && <button type="button" className={`pill${d.photoURL ? ' on' : ''}`} onClick={() => set('photoURL', d.photoURL ? null : initial.photoURL)}>{d.photoURL ? 'Using Google photo' : 'Use Google photo'}</button>}
+              {initial.photoURL && <button type="button" className={`pill${d.photoURL === initial.photoURL ? ' on' : ''}`} onClick={() => set('photoURL', initial.photoURL)}>{d.photoURL === initial.photoURL ? 'Current photo' : 'Use previous'}</button>}
               {[340, 15, 45, 160, 210, 280].map(h => <button type="button" key={h} aria-label={`Colour ${h}`} className={`swatch${!d.photoURL && d.hue === h ? ' on' : ''}`} style={{ background: `hsl(${h} 70% 55%)` }} onClick={() => setD(x => ({ ...x, hue: h, photoURL: null }))} />)}
             </div>
           </div>
@@ -164,5 +173,30 @@ export function TraitDetails({ vector, code }: { vector: number[]; code: string 
         <p className="muted small">Code {code}</p>
       </>}
     </div>
+  )
+}
+
+/** Username input with live availability check. */
+function UsernameField({ uid, value, original, onChange }: { uid: string; value: string; original: string; onChange: (v: string, ok: boolean) => void }) {
+  const [state, setState] = useState<'idle' | 'checking' | 'ok' | 'taken' | 'invalid'>(value && USERNAME_RE.test(value) ? 'ok' : 'idle')
+  useEffect(() => {
+    if (!value) { setState('idle'); onChange(value, false); return }
+    if (!USERNAME_RE.test(value)) { setState('invalid'); onChange(value, false); return }
+    if (value === original) { setState('ok'); onChange(value, true); return }
+    setState('checking'); onChange(value, false)
+    const t = setTimeout(() => {
+      usernameOwner(value).then(owner => { const ok = !owner || owner === uid; setState(ok ? 'ok' : 'taken'); onChange(value, ok) }).catch(() => { setState('ok'); onChange(value, true) })
+    }, 350)
+    return () => clearTimeout(t)
+  }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <label className="field">Username
+      <div className={`username-input ${state}`}>
+        <span>@</span>
+        <input value={value} maxLength={20} autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="yourname" onChange={e => onChange(normaliseUsername(e.target.value), false)} />
+        {state === 'ok' && <Check size={16} />}
+      </div>
+      <small className={state === 'taken' || state === 'invalid' ? 'error' : ''}>{state === 'taken' ? 'Taken' : state === 'invalid' ? '3–20 characters: a–z, 0–9, . _' : state === 'checking' ? 'Checking…' : ''}</small>
+    </label>
   )
 }

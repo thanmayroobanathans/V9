@@ -121,7 +121,7 @@ export function ProfileDetail({ me, p, f }: { me: Person; p: Person; f: Fit }) {
   const common = p.interests.filter(i => me.interests.includes(i))
   const tags = natureTags(p.nature)
   return <>
-    <div className="detail-head"><h3>{p.name}, {p.age}{p.sample && <small className="sample-tag inline">SAMPLE</small>}</h3><Ring value={f.score} size={48} /></div>
+    <div className="detail-head"><h3>{p.name}, {p.age}{p.username && <small className="handle">@{p.username}</small>}{p.sample && <small className="sample-tag inline">SAMPLE</small>}</h3><Ring value={f.score} size={48} /></div>
     <span className="tag">{INTENT_LABEL[p.intent] ?? 'Open to see'}</span> <span className="tag soft">{t.emoji} {t.name}</span>{tags.map(x => <span key={x} className="tag soft"> {x}</span>)}
     {p.status && <div className="status-bubble">“{p.status}”</div>}
     {p.bio && <p>{p.bio}</p>}

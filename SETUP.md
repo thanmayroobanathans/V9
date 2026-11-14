@@ -1,8 +1,15 @@
-# VIT PULSE V9.5
+# VIT PULSE V9.6
 
 A swipe-to-match app for VIT students. Swipe right to like and left to pass. When two people like each other they match and can chat one-to-one.
 
 ## Features
+
+- **VIT accounts only:** sign-in is limited to `@vitstudent.ac.in` Google accounts. This is checked in the app and enforced in `firestore.rules` (verified email with that domain).
+- **Username:** everyone picks a unique `@username` (3–20 characters: a–z, 0–9, `.`, `_`). Availability is checked live, and handles are claimed in a transaction (`usernames/{handle}`).
+- **Profile photo:** upload your own. It is cropped and compressed on the phone (~256 px) and stored with the profile, so no Firebase Storage or paid plan is needed.
+- **Follow requests:** search by username, then send a follow request. Once it's accepted, a chat opens between you.
+- **Private profiles and posts:** posts (text and/or photo) and their likes are visible only to you and to people whose follow request you accepted. Follower and following lists are visible only to you.
+- **Report, delete, legal:** you can report a profile or a problem, delete your account, and read the Terms of Use and Privacy Policy, which is written to the DPDP Act 2023, the IT Act 2000 and IT Rules 2021, and VIT conduct rules.
 
 - **Profile:** name, age (18+), program and year, who you are and who you want to see, what you're looking for, photo, bio, status, interests, "open to", and two prompts.
 - **Personality quiz:** 36 questions in a clean one-question-per-screen layout. People see a simple type (e.g. "The Spark ✨") and four sliders.
@@ -34,9 +41,11 @@ Every conversation is its own document (`matches/{a}_{b}`), and every message is
 
 Each person has a single listener on all their matches. The match document carries `lastMessage`, `lastSender` and `lastAt`. So if A and B both message C at the same moment, C's listener fires for both conversations, both show as unread, and C gets a pop-up. Firestore's offline cache queues messages sent without signal.
 
-## Terms
+## Terms and grievance officer
 
-At login, people must tick "I'm 18+ and agree to the Terms & Privacy Policy". The terms are also available in Settings.
+At login, people must tick "I'm 18+, a VIT student, and agree to the Terms of Use and Privacy Policy". Both documents are also in Settings.
+
+**Before launch, fill in `GRIEVANCE` (name and email) in `lib/config.ts`.** The IT Rules, 2021 require a named grievance officer. Have the text reviewed by someone qualified in Indian law, and check it against VIT's current student code of conduct.
 
 ## Firebase setup
 
@@ -51,7 +60,11 @@ At login, people must tick "I'm 18+ and agree to the Terms & Privacy Policy". Th
 | `users/{uid}` (+ `results`) | private profile and quiz results | owner only |
 | `publicProfiles/{uid}` | card data, traits, lifestyle features, area code (no coordinates, no email) | signed-in users |
 | `connections/{from}_{to}` | like / super / pass | sender and recipient |
-| `matches/{a}_{b}` + `messages` | match and its chat | the two members |
+| `matches/{a}_{b}` + `messages` | chat (after a mutual like or an accepted follow) | the two members |
+| `usernames/{handle}` | `{ uid }` — keeps usernames unique | signed-in users |
+| `follows/{from}_{to}` | follow request: pending / accepted | the two people involved |
+| `users/{uid}/posts/{id}` + `likes` | posts and likes | owner and accepted followers |
+| `reports/{id}` | reports | nobody via the app (review in the Firebase console) |
 
 ## Sample people
 

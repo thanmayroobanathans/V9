@@ -2,6 +2,7 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app'
 import { browserLocalPersistence, getAuth, GoogleAuthProvider, setPersistence, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
+import { ALLOWED_DOMAIN, isAllowedEmail } from './config'
 import { getFirestore, initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager, type Firestore } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -27,11 +28,18 @@ function makeDb(): Firestore | null {
 }
 export const db = makeDb()
 export const googleProvider = new GoogleAuthProvider()
-googleProvider.setCustomParameters({ prompt: 'select_account' })
+// `hd` asks Google to show only VIT student accounts; the email is checked again after sign-in
+// and enforced server-side in firestore.rules.
+googleProvider.setCustomParameters({ prompt: 'select_account', hd: ALLOWED_DOMAIN })
 
 export async function signInWithGoogle() {
   if (!auth) throw new Error('Firebase Authentication is unavailable. Check the Firebase project configuration.')
   await setPersistence(auth, browserLocalPersistence)
-  return signInWithPopup(auth, googleProvider)
+  const cred = await signInWithPopup(auth, googleProvider)
+  if (!isAllowedEmail(cred.user.email)) {
+    await firebaseSignOut(auth)
+    throw Object.assign(new Error(`Use your @${ALLOWED_DOMAIN} account`), { code: 'auth/domain' })
+  }
+  return cred
 }
 export async function signOut() { if (auth) await firebaseSignOut(auth) }

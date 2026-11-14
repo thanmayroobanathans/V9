@@ -394,3 +394,54 @@ button.chip:not(:disabled):hover{border-color:var(--accent)}
 .terms h3{margin:4px 0 8px;font-size:22px}
 .terms ul{padding-left:18px;color:var(--muted);line-height:1.7;font-size:14px;margin:0}
 .terms .primary-button.wide{margin-top:22px}
+
+/* ---- V9.6 social ---- */
+.username-input{display:flex;align-items:center;gap:6px;margin-top:8px;border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:0 14px}
+.username-input span{color:var(--muted)}
+.username-input input{flex:1;border:0!important;background:none!important;padding:12px 0!important;margin:0!important;outline:0}
+.username-input.ok{border-color:#7fd1a088}.username-input.ok svg{color:var(--green)}
+.username-input.taken,.username-input.invalid{border-color:#ff8a8a88}
+.field small.error{display:block;margin-top:4px;font-size:12px}
+.upload{min-height:36px;margin:6px 0 2px}
+.handle{display:block;font-size:13px;color:var(--muted);font-weight:500;margin-top:2px}
+.person-page .pp-head{display:flex;gap:16px;align-items:center;margin-top:6px}
+.pp-head h3{margin:0;font-size:22px}.pp-head div>span{display:block;color:var(--accent);font-size:14px;margin-top:2px}.pp-head div>small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.pp-bio{line-height:1.5;margin:14px 0 4px}
+.pp-actions{display:flex;gap:8px;margin:14px 0}
+.pp-actions .primary-button,.pp-actions .secondary-button{flex:1;min-height:40px;font-size:14px}
+.private{display:grid;justify-items:center;gap:6px;text-align:center;padding:34px 0 10px;color:var(--muted)}
+.private svg{color:var(--ink)}.private b{color:var(--ink)}
+.posts{display:grid;gap:14px;margin-top:16px}
+.post{background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.post img{display:block;width:100%;max-height:520px;object-fit:cover;background:#000}
+.post p{margin:12px 14px 0;line-height:1.5;white-space:pre-wrap}
+.post-foot{display:flex;align-items:center;gap:10px;padding:8px 10px 10px}
+.post-foot small{color:var(--muted);font-size:12px;margin-left:auto}
+.post-foot .ghost-button{min-height:30px;padding:0 6px}
+.like{display:flex;align-items:center;gap:6px;background:none;border:0;color:var(--ink);font-size:14px;padding:6px}
+.like.on{color:var(--accent)}.like.on svg{fill:var(--accent)}
+.composer-card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:12px;display:grid;gap:10px}
+.composer-card textarea{border:0;background:none;resize:none;outline:0;font-size:15px;color:var(--ink)}
+.composer-card .preview{position:relative}.composer-card .preview img{width:100%;border-radius:12px;max-height:300px;object-fit:cover}
+.composer-card .preview .icon-button{position:absolute;top:8px;right:8px;background:#000a}
+.composer-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.composer-row .primary-button{min-height:38px;padding:0 18px}
+.search-box{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:0 14px;margin-bottom:10px}
+.search-box svg{color:var(--muted)}
+.search-box input{flex:1;border:0;background:none;outline:0;padding:14px 0;font-size:16px;color:var(--ink)}
+.request-row{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line);padding:12px 4px}
+.request-row>div{flex:1;min-width:0}.request-row b{display:block;font-size:15px}.request-row span{display:block;color:var(--muted);font-size:13px}
+.primary-button.small,.secondary-button.small{min-height:34px;padding:0 14px;font-size:13px}
+.counts{display:flex;gap:10px;margin:14px 0 4px}
+.counts button{flex:1;background:var(--panel2);border:0;border-radius:14px;padding:10px;display:grid;gap:2px}
+.counts b{font-size:18px}.counts span{font-size:12px;color:var(--muted)}
+.report{display:grid;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:14px;margin:10px 0}
+.report select,.report textarea{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px;font-size:14px;color:var(--ink)}
+.setting.danger b{color:#ff8a8a}
+.legal{max-height:92vh}
+.legal-tabs{margin:0 0 8px;max-width:calc(100% - 48px)}
+.legal h3{font-size:22px;margin:10px 0 6px}
+.legal h4{margin:20px 0 8px}
+.legal p,.legal li{font-size:14px;line-height:1.65;color:#d8cfcb}
+.legal ul{padding-left:18px;margin:0}
+.legal li{margin-bottom:4px}

@@ -46,7 +46,7 @@ export function samplePeople(myArea: string | null): Person[] {
     const { mins, near, ...rest } = p
     return {
       age: 20, gender: 'woman', seeking: 'everyone', intent: 'open', prompts: [], ...rest,
-      uid: `sample-${i}`, vector, certainty: est.certainty, jung: jungFromAnswers(answers), archetype: c.name, archetypeCode: c.code, photoURL: null,
+      uid: `sample-${i}`, username: `${p.name.toLowerCase()}.sample`, vector, certainty: est.certainty, jung: jungFromAnswers(answers), archetype: c.name, archetypeCode: c.code, photoURL: null,
       nature: NATURES[i % NATURES.length], area: near ? area : area.slice(0, 5) + 'z', activeAt: now - mins * 60000, visible: true, sample: true,
     } as Person
   })
