@@ -5,7 +5,7 @@ import './globals.css'
 const base = process.env.NEXT_PUBLIC_BASE_PATH || ''
 
 export const metadata: Metadata = {
-  title: 'VIT PULSE V9 — Explore campus & chat',
+  title: 'VIT Pulse',
   description: 'See who is around on campus, find hangout spots, and chat.',
   generator: 'VIT PULSE',
   icons: {
@@ -42,6 +42,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="bg-background">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Grand+Hotel&display=swap" />
+      </head>
       <body className="antialiased">
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}

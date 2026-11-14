@@ -3,12 +3,10 @@
 import type { ReactNode } from 'react'
 
 export function Avatar({ name, photoURL, hue, size = 44, ring }: { name: string; photoURL?: string | null; hue: number; size?: number; ring?: boolean }) {
-  const style = { width: size, height: size, fontSize: size * 0.42, background: `linear-gradient(135deg,hsl(${hue} 70% 62%),hsl(${(hue + 40) % 360} 65% 42%))` }
-  return (
-    <span className={`avatar-v9${ring ? ' ring' : ''}`} style={style}>
-      {photoURL ? <img src={photoURL} alt="" referrerPolicy="no-referrer" /> : (name || '?')[0].toUpperCase()}
-    </span>
-  )
+  const inner = ring ? size - 8 : size
+  const style = { width: inner, height: inner, fontSize: inner * 0.42, background: `linear-gradient(135deg,hsl(${hue} 55% 55%),hsl(${(hue + 40) % 360} 50% 38%))` }
+  const face = <span className="avatar-v9" style={style}>{photoURL ? <img src={photoURL} alt="" referrerPolicy="no-referrer" /> : (name || '?')[0].toUpperCase()}</span>
+  return ring ? <span className="ring-wrap" style={{ width: size, height: size }}><span className="ring-gap">{face}</span></span> : face
 }
 
 /** Full-bleed card art: photo if present, else a generated gradient portrait. */

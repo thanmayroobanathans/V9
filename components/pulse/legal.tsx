@@ -1,28 +1,26 @@
 'use client'
 
 import { useState } from 'react'
-import { X } from 'lucide-react'
 import { ALLOWED_DOMAIN, GRIEVANCE, OPERATOR, POLICY_UPDATED } from '@/lib/config'
+import { Page } from './people'
 
 const grievanceLine = GRIEVANCE.email
   ? <>Grievance Officer: <b>{GRIEVANCE.name || 'Grievance Officer'}</b>, <b>{GRIEVANCE.email}</b>.</>
-  : <>Contact the Grievance Officer through <b>Settings → Report a problem</b> in the app.</>
+  : <>Contact the Grievance Officer through <b>Profile → Settings → Report a problem</b> in the app.</>
 
 export function Legal({ onClose, initial = 'terms' }: { onClose: () => void; initial?: 'terms' | 'privacy' }) {
   const [tab, setTab] = useState(initial)
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet legal" onClick={e => e.stopPropagation()} role="dialog" aria-label="Terms and Privacy Policy">
-        <button className="close-detail" onClick={onClose} aria-label="Close"><X size={18} /></button>
-        <div className="segmented small legal-tabs">
-          <button className={tab === 'terms' ? 'on' : ''} onClick={() => setTab('terms')}>Terms of Use</button>
-          <button className={tab === 'privacy' ? 'on' : ''} onClick={() => setTab('privacy')}>Privacy Policy</button>
+    <Page title={tab === 'terms' ? 'Terms of Use' : 'Privacy Policy'} onBack={onClose}>
+      <div className="legal">
+        <div className="ig-switch">
+          <button className={tab === 'terms' ? 'on' : ''} onClick={() => setTab('terms')}>Terms</button>
+          <button className={tab === 'privacy' ? 'on' : ''} onClick={() => setTab('privacy')}>Privacy</button>
         </div>
         <small className="muted">Last updated {POLICY_UPDATED}</small>
         {tab === 'terms' ? <Terms /> : <Privacy />}
-        <button className="primary-button wide" onClick={onClose}>Close</button>
       </div>
-    </div>
+    </Page>
   )
 }
 

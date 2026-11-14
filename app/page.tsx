@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { onAuthStateChanged, type User } from 'firebase/auth'
-import { ArrowRight, Flame, LogOut, MessageSquare, Pencil, RefreshCw, Search as SearchIcon, Settings, UserRound } from 'lucide-react'
+import { Flame, MessageCircle, Search as SearchIcon, UserRound } from 'lucide-react'
 import { auth, firebaseConfigured, signInWithGoogle, signOut } from '@/lib/firebase'
 import { classify } from '@/lib/pulse-model'
 import { estimateTraits } from '@/lib/trait-kalman'
@@ -13,7 +13,7 @@ import { areaCode, clearTrack, computeNature, natureTags, record } from '@/lib/n
 import { saveProfile, saveResult } from '@/lib/firestore'
 import { SIGNAL, features, newLearner, pack, unpack, update, type LearnerState } from '@/lib/learner'
 import {
-  INTENT_LABEL, PROMPTS, loadMySwipes, loadPerson, loadTaste, saveTaste, acceptFollow, cancelFollow, claimUsername, deleteAccount, normaliseUsername, removeFollower, requestFollow, watchFollows, type Follow, pairId, savePerson, sendMessage, swipe, unmatch, updateSignals,
+  loadMySwipes, loadPerson, loadTaste, saveTaste, acceptFollow, cancelFollow, claimUsername, deleteAccount, normaliseUsername, removeFollower, requestFollow, watchFollows, type Follow, pairId, savePerson, sendMessage, swipe, unmatch, updateSignals,
   watchMatches, watchMessages, watchPeople, type Match, type Message, type Person, type Swipe,
 } from '@/lib/social'
 import { samplePeople, sampleReply } from '@/lib/samples'
@@ -21,15 +21,15 @@ import { ProfileBuilder, QuizIntro, TraitDetails, TypeCard, type Draft } from '@
 import { Discover, ProfileDetail } from '@/components/pulse/discover'
 import { ChatView, Inbox, MatchModal, isUnread, matchStarters, otherOf } from '@/components/pulse/chat'
 import { Avatar, Chips, Ring } from '@/components/pulse/ui'
-import { FollowLists, PersonPage, Posts, ReportForm, Requests, Search, type FollowState } from '@/components/pulse/people'
+import { FollowLists, Page as FullPage, ProfileScreen, ReportPage, Requests, Search, type FollowState } from '@/components/pulse/people'
 import { Legal } from '@/components/pulse/legal'
 import { isAllowedEmail, ALLOWED_DOMAIN } from '@/lib/config'
 
-type Tab = 'swipe' | 'search' | 'matches' | 'profile' | 'settings'
+type Tab = 'swipe' | 'search' | 'matches' | 'profile'
 type Stage = 'gate' | 'loading' | 'build' | 'reveal' | 'app'
 type Geo = 'off' | 'asking' | 'on' | 'denied'
 
-const nav = [{ id: 'swipe', label: 'Swipe', icon: Flame }, { id: 'search', label: 'Search', icon: SearchIcon }, { id: 'matches', label: 'Chats', icon: MessageSquare }, { id: 'profile', label: 'Profile', icon: UserRound }, { id: 'settings', label: 'Settings', icon: Settings }] as const
+const nav = [{ id: 'swipe', icon: Flame }, { id: 'search', icon: SearchIcon }, { id: 'matches', icon: MessageCircle }, { id: 'profile', icon: UserRound }] as const
 const SIGNAL_MS = 10 * 60 * 1000 // publish lifestyle signals at most every 10 minutes
 const PAGE = 100
 
@@ -70,12 +70,15 @@ export default function Page() {
   const [peopleLoaded, setPeopleLoaded] = useState(false)
   const [incoming, setIncoming] = useState<Follow[]>([])
   const [outgoing, setOutgoing] = useState<Follow[]>([])
-  const [personView, setPersonView] = useState<Person | null>(null)
   const [legal, setLegal] = useState<'terms' | 'privacy' | null>(null)
-  const [reporting, setReporting] = useState(false)
+  type Screen = { kind: 'person'; p: Person } | { kind: 'lists'; tab: 'followers' | 'following' } | { kind: 'report'; target?: Person } | { kind: 'settings' } | { kind: 'swipeinfo'; p: Person }
+  const [stack, setStack] = useState<Screen[]>([])
+  const push = (x: Screen) => setStack(st => [...st, x])
+  const pop = () => setStack(st => st.slice(0, -1))
+  const [sampleFollows, setSampleFollows] = useState<string[]>([])
+  const [confirmDelete, setConfirmDelete] = useState('')
   const [celebrate, setCelebrate] = useState<{ other: Person; matchId: string } | null>(null)
   const [chatId, setChatId] = useState<string | null>(null)
-  const [viewing, setViewing] = useState<Person | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [msgCount, setMsgCount] = useState(PAGE)
   const [hasMore, setHasMore] = useState(false)
@@ -147,7 +150,7 @@ export default function Page() {
   // ---------- profile ----------
   const blankDraft = useMemo<Draft>(() => ({
     uid: user?.uid ?? '', username: normaliseUsername((user?.email ?? '').split('@')[0]).replace(/^[._]+/, ''), name: user?.displayName?.split(' ')[0] ?? '', age: 0, gender: 'woman', seeking: 'men', intent: 'open', program: '', year: '2nd year', bio: '', status: '',
-    interests: [], openTo: [], prompts: [{ q: PROMPTS[0], a: '' }, { q: PROMPTS[2], a: '' }], photoURL: user?.photoURL ?? null, hue: 210, nature: null, area: null, activeAt: 0, visible: true,
+    interests: [], openTo: [], prompts: [], photoURL: user?.photoURL ?? null, hue: 210, nature: null, area: null, activeAt: 0, visible: true,
     ...(partial ? Object.fromEntries(Object.entries(partial).filter(([k, v]) => v !== undefined && v !== null && v !== '' && !['loc', 'locAt', 'placeId'].includes(k))) : {}),
   } as Draft), [user, partial])
 
@@ -265,8 +268,6 @@ export default function Page() {
   async function accept(f: Follow) { if (!me) return; try { await acceptFollow(me, f) } catch (e) { setError(e instanceof Error ? e.message : 'Could not accept') } }
   async function removeAccount() {
     if (!me) return
-    const typed = window.prompt(`Delete your account permanently? Type your username (${me.username}) to confirm.`)
-    if (typed?.trim().toLowerCase() !== me.username) return
     try { await deleteAccount(me.uid, me.username); clearTrack(); await signOut() } catch (e) { setError(e instanceof Error ? e.message : 'Could not delete account') }
   }
   function openChat(id: string) { setTab('matches'); setEditing(null); setChatId(id); setToast(null) }
@@ -285,114 +286,105 @@ export default function Page() {
   // ---------- render ----------
   if (stage === 'gate') return (
     <main className="gate">
-      <div className="gate-glow" />
-      <div className="gate-inner">
-        <div className="eyebrow"><span className="status-dot" /> VIT PULSE / V9</div>
-        <h1>Swipe.<br /><em>Match. Chat.</em></h1>
-        <p className="muted">For VIT students. Sign in with your @{ALLOWED_DOMAIN} account.</p>
-        <label className="agree"><input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} /><span>I&apos;m 18+, a VIT student, and agree to the <button type="button" className="link-button inline" onClick={() => setLegal('terms')}>Terms of Use</button> and <button type="button" className="link-button inline" onClick={() => setLegal('privacy')}>Privacy Policy</button></span></label>
-        <button className="primary-button wide" disabled={!agreed} onClick={login}>Continue with Google <ArrowRight size={16} /></button>
+      <div className="gate-inner page-in">
+        <div className="logo big">VIT Pulse</div>
+        <p className="muted center">Meet VIT students who fit you.</p>
+        <button className="primary-button wide" disabled={!agreed} onClick={login}>Continue with Google</button>
+        <label className="agree"><input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} /><span>I&apos;m 18+, a VIT student, and agree to the <button type="button" className="link-button inline" onClick={() => setLegal('terms')}>Terms</button> and <button type="button" className="link-button inline" onClick={() => setLegal('privacy')}>Privacy Policy</button>.</span></label>
         {!firebaseConfigured && <p className="config-note">Firebase configuration required.</p>}
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error center">{error}</p>}
+        <p className="gate-foot">Use your @{ALLOWED_DOMAIN} account</p>
       </div>
       {legal && <Legal initial={legal} onClose={() => setLegal(null)} />}
     </main>
   )
-  if (stage === 'loading') return <main className="gate"><div className="gate-inner center"><RefreshCw className="spin" /><p className="muted">Loading…</p></div></main>
+  if (stage === 'loading') return <main className="gate"><div className="logo big pulse">VIT Pulse</div></main>
   if (stage === 'build') return <main className="solo">{error && <p className="error banner" onClick={() => setError('')}>{error}</p>}<ProfileBuilder initial={blankDraft} mode="onboard" locationOn={geo === 'on' || geo === 'asking'} requestLocation={() => setWantLocation(true)} onDone={finishBuild} saving={saving} /></main>
   if (stage === 'reveal' && me) return (
-    <main className="solo"><section className="builder">
-      <h2>Meet <em>you</em></h2>
+    <main className="solo"><section className="builder page-in reveal">
+      <Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={96} ring />
+      <h2 className="step-title">You&apos;re all set, {me.name}</h2>
       <TypeCard jung={me.jung} />
-      <button className="primary-button wide" onClick={() => { setStage('app'); setTab('swipe') }}>Start swiping <ArrowRight size={16} /></button>
+      <button className="primary-button wide" onClick={() => { setStage('app'); setTab('swipe') }}>Start</button>
     </section></main>
   )
   if (!me) return null
 
-  const go = (t: Tab) => { setTab(t); setEditing(null); setChatId(null) }
+  const go = (t: Tab) => { setTab(t); setEditing(null); setChatId(null); setStack([]) }
   const other = active ? byUid[otherOf(active, me.uid)] : undefined
-  const myTags = natureTags(me.nature)
+  const top = stack[stack.length - 1]
+  const followers = incoming.filter(f => f.status === 'accepted').length, followingN = outgoing.filter(f => f.status === 'accepted').length
+  const pendingN = incoming.filter(f => f.status === 'pending').length
+  const fsOf = (p: Person): FollowState => p.sample ? (sampleFollows.includes(p.uid) ? 'following' : 'none') : followStateOf(p.uid)
+  const openPerson = (p: Person) => push({ kind: 'person', p })
 
-  return (
-    <div className={`app-shell${chatId ? ' in-chat' : ''}`}>
-      <header className="topbar"><div className="brand">VIT PULSE <span>/ V9</span></div><div className="top-status"><span className="status-dot" /> {me.visible ? 'VISIBLE' : 'HIDDEN'}<button onClick={() => go('profile')} aria-label="Your profile"><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={28} /></button></div></header>
-      <div className="app-body">
-        <aside className="sidebar">
-          <div className="subject-chip"><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={36} /><div><b>{me.name}</b><small>{typeInfo(jungOf(me)).emoji} {typeInfo(jungOf(me)).name}</small></div></div>
-          <nav>{nav.map(({ id, label, icon: Icon }) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => go(id)}><Icon size={17} />{label}{id === 'matches' && unreadCount > 0 && <i className="badge">{unreadCount}</i>}</button>)}</nav>
-          <div className="sidebar-foot">V9.5</div>
-        </aside>
-        <main className="content">
-          {error && <p className="error banner" onClick={() => setError('')} title="Dismiss">{error}</p>}
-          {editing === 'profile' && <ProfileBuilder initial={me} mode="edit" locationOn={geo === 'on'} requestLocation={() => setWantLocation(true)} onDone={d => finishBuild(d)} onCancel={() => setEditing(null)} saving={saving} />}
-          {editing === 'quiz' && <QuizIntro onBack={() => setEditing(null)} onDone={a => finishBuild(me, a)} />}
-
-          {!editing && tab === 'search' && <Search meUid={me.uid} onOpen={setPersonView} />}
-          {!editing && tab === 'swipe' && <Discover me={me} candidates={candidates} taste={taste} onSwipe={handleSwipe} loading={!peopleLoaded} />}
-
-          {!editing && tab === 'matches' && (active
-            ? <ChatView meUid={me.uid} messages={active.sample ? sampleMsgs[active.id] ?? [] : messages} hasMore={!active.sample && hasMore} onLoadMore={() => setMsgCount(c => c + PAGE)} onSend={handleSend} onBack={() => setChatId(null)}
-                placeholder={`Message ${active.members[otherOf(active, me.uid)]?.name ?? ''}`}
-                header={(() => { const o = active.members[otherOf(active, me.uid)]; return <><Avatar name={o?.name} photoURL={o?.photoURL} hue={o?.hue ?? 0} size={38} /><button className="chat-title" onClick={() => other && (other.sample ? setViewing(other) : setPersonView(other))}><b>{o?.name}</b><small>{other ? `${other.program} · ${other.year}` : 'Matched'}{active.sample ? ' · SAMPLE' : ''}</small></button>{other && <Ring value={fit(me, other, taste).score} size={40} />}</> })()}
-                banner={<div className="chat-id-banner subtle"><span /><button className="ghost-button" onClick={async () => { if (active.sample) setSampleMatches(ms => ms.filter(m => m.id !== active.id)); else await unmatch(active.id).catch(() => {}); setChatId(null) }}>Unmatch</button></div>}
-                footer={active.status === 'closed' ? <div className="composer closed">Chat closed</div> : undefined}
-                empty={<><b>You matched with {active.members[otherOf(active, me.uid)]?.name}</b><span className="muted">Say hi 👋</span></>}
-                starters={matchStarters(me, other)} />
-            : <><Inbox me={me} matches={allMatches} people={byUid} lastRead={lastRead} onOpen={openChat} /><Requests incoming={incoming} onAccept={accept} onDecline={f => removeFollower(me.uid, f.fromUid).catch(() => {})} /></>)}
-
-          {!editing && tab === 'profile' && (
-            <section className="profile-view">
-              <div className="discover-head"><div><h2>Your <em>profile</em></h2></div><button className="secondary-button" onClick={() => setEditing('profile')}><Pencil size={14} /> Edit</button></div>
-              <div className="sheet inline">
-                <div className="sheet-head"><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={72} ring /><div><h3>{me.name}, {me.age}</h3><span>@{me.username} · {me.program} · {me.year}</span></div></div>
-                <FollowLists incoming={incoming} outgoing={outgoing} onRemoveFollower={f => removeFollower(me.uid, f.fromUid).catch(() => {})} onUnfollow={f => unfollow(f.toUid)} />
-                <span className="tag">{INTENT_LABEL[me.intent] ?? 'Open to see'}</span>{myTags.map(t => <span key={t} className="tag soft"> {t}</span>)}
-                {me.status && <div className="status-bubble">“{me.status}”</div>}
-                {me.bio && <p>{me.bio}</p>}
-                {me.prompts?.filter(p => p.a).map(p => <div className="prompt-card" key={p.q}><small>{p.q}</small><b>{p.a}</b></div>)}
-                <h4>Open to</h4><Chips items={me.openTo} />
-                <h4>Interests</h4><Chips items={me.interests} />
-              </div>
-              <h4>Personality <button className="link-button" onClick={() => setEditing('quiz')}>Retake</button></h4>
-              <TypeCard jung={jungOf(me)} />
-              <TraitDetails vector={me.vector} code={typeInfo(jungOf(me)).code} />
-              <h4>Posts</h4>
-              <Posts owner={me.uid} me={me.uid} editable />
-            </section>
-          )}
-
-          {!editing && tab === 'settings' && (
-            <section className="panel">
-              <h2><em>Settings</em></h2>
-              <div className="setting"><div><b>Location</b><span>{geo === 'denied' ? 'Blocked in browser settings' : 'Improves matches. Never shown.'}</span></div><button className={`toggle${wantLocation ? ' on' : ''}`} onClick={() => { const v = !wantLocation; setWantLocation(v); if (!v) { clearTrack(); updateSignals(me.uid, null, null).catch(() => {}); setMe({ ...me, nature: null, area: null }) } }} aria-pressed={wantLocation}><i /></button></div>
-              <div className="setting"><div><b>Show me</b><span>Off pauses your profile</span></div><button className={`toggle${me.visible ? ' on' : ''}`} onClick={() => updateMe({ visible: !me.visible })} aria-pressed={me.visible}><i /></button></div>
-              <div className="setting"><div><b>Sample profiles</b><span>Demo profiles</span></div><button className={`toggle${useSamples ? ' on' : ''}`} onClick={() => setUseSamples(!useSamples)} aria-pressed={useSamples}><i /></button></div>
-              <div className="setting"><div><b>Reset demo</b><span /></div><button className="secondary-button" onClick={() => { setSampleSwiped([]); setSampleMatches([]); setSampleMsgs({}) }}>Reset</button></div>
-              <div className="setting"><div><b>Terms of Use</b><span /></div><button className="secondary-button" onClick={() => setLegal('terms')}>View</button></div>
-              <div className="setting"><div><b>Report a problem</b><span /></div><button className="secondary-button" onClick={() => setReporting(true)}>Report</button></div>
-              {reporting && <ReportForm me={me.uid} onClose={() => setReporting(false)} />}
-              <div className="setting"><div><b>Privacy Policy</b><span /></div><button className="secondary-button" onClick={() => setLegal('privacy')}>View</button></div>
-              <div className="setting danger"><div><b>Delete account</b><span>Removes your profile, posts and data</span></div><button className="secondary-button" onClick={removeAccount}>Delete</button></div>
-              <div className="setting"><div><b>Sign out</b><span /></div><button className="secondary-button" onClick={() => signOut()}><LogOut size={14} /> Sign out</button></div>
-            </section>
-          )}
-        </main>
-      </div>
-      {viewing && (
-        <div className="sheet-backdrop" onClick={() => setViewing(null)}>
-          <div className="sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label={viewing.name}>
-            <button className="close-detail" onClick={() => setViewing(null)} aria-label="Close">✕</button>
-            <ProfileDetail me={me} p={viewing} f={fit(me, viewing, taste)} />
+  const screen = (() => {
+    if (editing === 'profile') return <ProfileBuilder initial={me} mode="edit" locationOn={geo === 'on'} requestLocation={() => setWantLocation(true)} onDone={d => finishBuild(d)} onCancel={() => setEditing(null)} saving={saving} />
+    if (editing === 'quiz') return <QuizIntro onBack={() => setEditing(null)} onDone={a => finishBuild(me, a)} />
+    if (top?.kind === 'person') {
+      const p = top.p
+      return <FullPage title={p.username || p.name} onBack={pop}>
+        <ProfileScreen me={me} person={p} followState={fsOf(p)} followsMe={incoming.some(f => f.fromUid === p.uid && f.status === 'accepted')} chatId={chatWith(p.uid)}
+          onFollow={() => p.sample ? setSampleFollows(x => [...x, p.uid]) : follow(p)} onUnfollow={() => p.sample ? setSampleFollows(x => x.filter(u => u !== p.uid)) : unfollow(p.uid)}
+          onMessage={id => { setStack([]); openChat(id) }} onReport={() => push({ kind: 'report', target: p })} />
+      </FullPage>
+    }
+    if (top?.kind === 'lists') return <FollowLists initial={top.tab} username={me.username} incoming={incoming} outgoing={outgoing} onBack={pop} onRemoveFollower={f => removeFollower(me.uid, f.fromUid).catch(() => {})} onUnfollow={f => unfollow(f.toUid)} />
+    if (top?.kind === 'report') return <ReportPage me={me.uid} target={top.target} onBack={pop} />
+    if (top?.kind === 'swipeinfo') return <FullPage title={top.p.name} onBack={pop}><div className="sheet inline"><ProfileDetail me={me} p={top.p} f={fit(me, top.p, taste)} /></div></FullPage>
+    if (top?.kind === 'settings') return (
+      <FullPage title="Settings" onBack={pop}>
+        <div className="settings">
+          <button className="set-row" onClick={() => { const v = !wantLocation; setWantLocation(v); if (!v) { clearTrack(); updateSignals(me.uid, null, null).catch(() => {}); setMe({ ...me, nature: null, area: null }) } }}><span>Location<small>{geo === 'denied' ? 'Blocked in browser' : 'Improves matches · never shown'}</small></span><i className={`switch${wantLocation ? ' on' : ''}`} /></button>
+          <button className="set-row" onClick={() => updateMe({ visible: !me.visible })}><span>Show my profile<small>Off pauses swiping</small></span><i className={`switch${me.visible ? ' on' : ''}`} /></button>
+          <button className="set-row" onClick={() => setUseSamples(!useSamples)}><span>Demo profiles</span><i className={`switch${useSamples ? ' on' : ''}`} /></button>
+          <button className="set-row" onClick={() => setEditing('quiz')}><span>Retake personality quiz</span></button>
+          <button className="set-row" onClick={() => push({ kind: 'report' })}><span>Report a problem</span></button>
+          <button className="set-row" onClick={() => setLegal('terms')}><span>Terms of Use</span></button>
+          <button className="set-row" onClick={() => setLegal('privacy')}><span>Privacy Policy</span></button>
+          <button className="set-row" onClick={() => signOut()}><span className="blue">Log out</span></button>
+          <div className="set-row col">
+            <span className="danger">Delete account</span>
+            <small className="muted">Type <b>{me.username}</b> to permanently delete your profile, posts and data.</small>
+            <input value={confirmDelete} autoCapitalize="none" placeholder={me.username} onChange={e => setConfirmDelete(e.target.value.trim().toLowerCase())} />
+            <button className="danger-button" disabled={confirmDelete !== me.username} onClick={removeAccount}>Delete account</button>
           </div>
         </div>
-      )}
-      {personView && (
-        <PersonPage me={me} p={personView} followState={followStateOf(personView.uid)} followsMe={incoming.some(f => f.fromUid === personView.uid && f.status === 'accepted')} chatId={chatWith(personView.uid)}
-          onFollow={() => follow(personView)} onUnfollow={() => unfollow(personView.uid)} onMessage={id => { setPersonView(null); openChat(id) }} onClose={() => setPersonView(null)} />
+      </FullPage>
+    )
+    if (tab === 'swipe') return <Discover me={me} candidates={candidates} taste={taste} onSwipe={handleSwipe} loading={!peopleLoaded} />
+    if (tab === 'search') return <Search meUid={me.uid} onOpen={openPerson} />
+    if (tab === 'matches') return active
+      ? <ChatView meUid={me.uid} messages={active.sample ? sampleMsgs[active.id] ?? [] : messages} hasMore={!active.sample && hasMore} onLoadMore={() => setMsgCount(c => c + PAGE)} onSend={handleSend} onBack={() => setChatId(null)}
+          placeholder="Message…"
+          header={(() => { const o = active.members[otherOf(active, me.uid)]; return <button className="chat-title" onClick={() => other && openPerson(other)}><Avatar name={o?.name} photoURL={o?.photoURL} hue={o?.hue ?? 0} size={34} /><span><b>{o?.name}</b><small>{other?.username ?? ''}</small></span></button> })()}
+          banner={<div className="chat-strip"><button className="link-button muted-link" onClick={async () => { if (active.sample) setSampleMatches(ms => ms.filter(m => m.id !== active.id)); else await unmatch(active.id).catch(() => {}); setChatId(null) }}>Unmatch</button></div>}
+          footer={active.status === 'closed' ? <div className="composer closed">Chat closed</div> : undefined}
+          empty={<><Avatar name={active.members[otherOf(active, me.uid)]?.name} photoURL={active.members[otherOf(active, me.uid)]?.photoURL} hue={active.members[otherOf(active, me.uid)]?.hue ?? 0} size={88} /><b>{active.members[otherOf(active, me.uid)]?.name}</b><span className="muted">Say hi 👋</span></>}
+          starters={matchStarters(me, other)} />
+      : <><Requests incoming={incoming} onAccept={accept} onDecline={f => removeFollower(me.uid, f.fromUid).catch(() => {})} /><Inbox me={me} matches={allMatches} people={byUid} lastRead={lastRead} onOpen={openChat} /></>
+    return <ProfileScreen me={me} person={me} counts={{ followers, following: followingN }} onEdit={() => setEditing('profile')} onSettings={() => push({ kind: 'settings' })} onLists={t => push({ kind: 'lists', tab: t })} />
+  })()
+
+  const fullscreen = !!editing || !!top || (tab === 'matches' && !!active)
+  return (
+    <div className={`app-shell ig${chatId ? ' in-chat' : ''}`}>
+      {!fullscreen && <header className="ig-bar">{tab === 'profile' ? <b className="ig-user">{me.username}</b> : <span className="logo">VIT Pulse</span>}{tab === 'swipe' && <span className="muted small">{candidates.length ? '' : ''}</span>}</header>}
+      <main className="ig-main">
+        {error && <p className="error banner" onClick={() => setError('')} title="Dismiss">{error}</p>}
+        {screen}
+      </main>
+      {!fullscreen && (
+        <nav className="ig-nav">
+          {nav.map(({ id, icon: Icon }) => <button key={id} className={tab === id ? 'on' : ''} onClick={() => go(id as Tab)} aria-label={id}>
+            {id === 'profile' ? <span className={`nav-avatar${tab === id ? ' on' : ''}`}><Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={26} /></span> : <Icon size={26} strokeWidth={tab === id ? 2.4 : 1.8} />}
+            {id === 'matches' && unreadCount + pendingN > 0 && <i className="nav-dot" />}
+          </button>)}
+        </nav>
       )}
       {celebrate && <MatchModal me={me} other={celebrate.other} onClose={() => setCelebrate(null)} onChat={() => { openChat(celebrate.matchId); setCelebrate(null) }} />}
       {legal && <Legal initial={legal} onClose={() => setLegal(null)} />}
-      {toast && <button className="toast" onClick={() => toast.matchId && openChat(toast.matchId)}>💬 {toast.text}</button>}
+      {toast && <button className="toast" onClick={() => toast.matchId && openChat(toast.matchId)}><b>{toast.text.split(':')[0]}</b>{toast.text.slice(toast.text.indexOf(':') + 1)}</button>}
     </div>
   )
 }

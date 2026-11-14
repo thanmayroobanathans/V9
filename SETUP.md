@@ -1,6 +1,6 @@
-# VIT PULSE V9.6
+# VIT PULSE V9.7
 
-A swipe-to-match app for VIT students. Swipe right to like and left to pass. When two people like each other they match and can chat one-to-one.
+A swipe-to-match app for VIT students with an Instagram-style interface: black theme, gradient story rings, a profile with stats and a 3-column post grid, full-screen pages instead of popups, and light CSS-only animations. Swipe right to like and left to pass. When two people like each other they match and can chat one-to-one.
 
 ## Features
 
@@ -11,7 +11,7 @@ A swipe-to-match app for VIT students. Swipe right to like and left to pass. Whe
 - **Private profiles and posts:** posts (text and/or photo) and their likes are visible only to you and to people whose follow request you accepted. Follower and following lists are visible only to you.
 - **Report, delete, legal:** you can report a profile or a problem, delete your account, and read the Terms of Use and Privacy Policy, which is written to the DPDP Act 2023, the IT Act 2000 and IT Rules 2021, and VIT conduct rules.
 
-- **Profile:** name, age (18+), program and year, who you are and who you want to see, what you're looking for, photo, bio, status, interests, "open to", and two prompts.
+- **Profile:** photo (tap to upload your own), username, name, age (18+), program, year, gender, who you want to see, what you're looking for, bio and interests.
 - **Personality quiz:** 36 questions in a clean one-question-per-screen layout. People see a simple type (e.g. "The Spark ✨") and four sliders.
 - **Swipe:** a card deck ranked by match %, with plain-English reasons ("You're both night owls", "Into Coding, Music"). You can filter by age and by what people are looking for.
 - **Matches & chat:** a match is only created when both people liked each other (enforced in `firestore.rules`). Chats are live, with icebreakers, unread badges, a pop-up for new messages in any conversation, offline sending, and "load earlier" paging.

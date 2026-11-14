@@ -25,7 +25,7 @@ export function Discover({ me, candidates, taste, onSwipe, loading }: {
   return (
     <section className="discover">
       <div className="discover-head">
-        <div><h2>Today&apos;s <em>picks</em></h2></div>
+        <div />
         <button className="icon-button" aria-label="Filters" onClick={() => setShowFilters(s => !s)}><SlidersHorizontal size={18} /></button>
       </div>
       {showFilters && (
@@ -36,12 +36,9 @@ export function Discover({ me, candidates, taste, onSwipe, loading }: {
               <input type="range" min={18} max={40} value={filters.max} onChange={e => setFilters(f => ({ ...f, max: Math.max(Number(e.target.value), f.min) }))} />
             </div>
           </label>
-          <label>Looking for
-            <select value={filters.intent} onChange={e => setFilters(f => ({ ...f, intent: e.target.value as Filters['intent'] }))}>
-              <option value="any">Anything</option>
-              {(Object.keys(INTENT_LABEL) as Intent[]).map(i => <option key={i} value={i}>{INTENT_LABEL[i]}</option>)}
-            </select>
-          </label>
+          <div className="filter-field">Looking for
+            <div className="chips">{(['any', ...Object.keys(INTENT_LABEL)] as (Intent | 'any')[]).map(i => <button key={i} type="button" className={`chip${filters.intent === i ? ' on' : ''}`} onClick={() => setFilters(f => ({ ...f, intent: i }))}>{i === 'any' ? 'Anyone' : INTENT_LABEL[i as Intent]}</button>)}</div>
+          </div>
         </div>
       )}
       <div className="deck">
@@ -93,7 +90,7 @@ function SwipeCard({ me, p, f, depth, onSwipe }: { me: Person; p: Person; f: Fit
               <Ring value={f.score} />
             </div>
             <div className="card-meta"><b>{fitLabel(f.score)}</b> · {t.emoji} {t.name}{tags.length ? ` · ${tags[0]}` : ''}</div>
-            <p className="card-bio">{p.status ? `“${p.status}”` : p.bio}</p>
+            <p className="card-bio">{p.bio}</p>
             {isTop && <button className="info-button" aria-label="More about this person" onPointerDown={e => e.stopPropagation()} onClick={() => setOpen(true)}><Info size={16} /></button>}
           </div>
         </Portrait>
@@ -123,12 +120,9 @@ export function ProfileDetail({ me, p, f }: { me: Person; p: Person; f: Fit }) {
   return <>
     <div className="detail-head"><h3>{p.name}, {p.age}{p.username && <small className="handle">@{p.username}</small>}{p.sample && <small className="sample-tag inline">SAMPLE</small>}</h3><Ring value={f.score} size={48} /></div>
     <span className="tag">{INTENT_LABEL[p.intent] ?? 'Open to see'}</span> <span className="tag soft">{t.emoji} {t.name}</span>{tags.map(x => <span key={x} className="tag soft"> {x}</span>)}
-    {p.status && <div className="status-bubble">“{p.status}”</div>}
     {p.bio && <p>{p.bio}</p>}
-    {p.prompts?.filter(pr => pr.a).map(pr => <div className="prompt-card" key={pr.q}><small>{pr.q}</small><b>{pr.a}</b></div>)}
     <h4>{fitLabel(f.score)}</h4>
     {f.reasons.length > 0 && <ul className="why">{f.reasons.slice(0, 3).map(r => <li key={r}>{r}</li>)}</ul>}
-    <h4>Open to</h4><Chips items={p.openTo ?? []} active={(p.openTo ?? []).filter(o => me.openTo?.includes(o))} />
     <h4>Interests{common.length ? ` · ${common.length} in common` : ''}</h4><Chips items={p.interests} active={common} />
   </>
 }
