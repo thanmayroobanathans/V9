@@ -1,5 +1,6 @@
 import type { Person } from './social'
-import { QUESTIONS, classify, scoreAnswers } from './pulse-model'
+import { QUESTIONS, classify } from './pulse-model'
+import { estimateTraits } from './trait-kalman'
 import { jungFromAnswers } from './jung'
 import { areaCode, type Nature } from './nature'
 
@@ -40,12 +41,12 @@ export function samplePeople(myArea: string | null): Person[] {
   return RAW.map((p, i) => {
     const r = seed(i * 7919 + 13)
     const answers = QUESTIONS.map(() => Math.floor(r() * 4))
-    const vector = scoreAnswers(answers).map(v => Math.round(v * 100) / 100)
+    const est = estimateTraits(answers), vector = est.vector
     const c = classify(vector).primary
     const { mins, near, ...rest } = p
     return {
       age: 20, gender: 'woman', seeking: 'everyone', intent: 'open', prompts: [], ...rest,
-      uid: `sample-${i}`, vector, jung: jungFromAnswers(answers), archetype: c.name, archetypeCode: c.code, photoURL: null,
+      uid: `sample-${i}`, vector, certainty: est.certainty, consistency: est.consistency, jung: jungFromAnswers(answers), archetype: c.name, archetypeCode: c.code, photoURL: null,
       nature: NATURES[i % NATURES.length], area: near ? area : area.slice(0, 5) + 'z', activeAt: now - mins * 60000, visible: true, sample: true,
     } as Person
   })

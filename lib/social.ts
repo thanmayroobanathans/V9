@@ -35,7 +35,11 @@ export type Person = {
   hue: number
   archetype: string
   archetypeCode: string
+  /** 11 traits estimated by the Kalman filter over the 36 answers (0…1). */
   vector: number[]
+  /** How settled the estimate is (0…1) and how self-consistent the answers were (0…1). */
+  certainty?: number
+  consistency?: number
   jung: Jung
   /** Lifestyle features learned on-device from Kalman-smoothed location. Never coordinates. */
   nature: Nature | null

@@ -122,7 +122,8 @@ button.chip:not(:disabled):hover{border-color:var(--accent)}
 .calibration h3{font-size:clamp(22px,4.5vw,32px);font-weight:600;line-height:1.25;margin:30px 0}
 .choices{display:grid;gap:10px}
 .choices button{display:flex;align-items:center;gap:16px;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:16px;color:var(--ink);padding:16px 18px;font-size:15px;transition:.15s}
-.choices button:hover{border-color:var(--accent);transform:translateX(4px)}
+@media (hover:hover){.choices button:hover{border-color:var(--accent);transform:translateX(4px)}}
+.choices button:active{border-color:var(--accent);background:#ff5a7a14}
 .choices span{color:var(--accent);font:600 12px var(--mono);width:24px;height:24px;border-radius:50%;background:#ff5a7a1f;display:grid;place-items:center;flex:none}
 .machine-foot{display:flex;justify-content:space-between;align-items:center;gap:14px;color:var(--muted);margin-top:28px;font-size:12px}
 
@@ -372,3 +373,33 @@ button.chip:not(:disabled):hover{border-color:var(--accent)}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);max-width:min(440px,calc(100% - 32px));background:var(--panel2);border:1px solid var(--accent);color:var(--ink);padding:12px 18px;border-radius:16px;font-size:14px;z-index:70;box-shadow:0 12px 30px -12px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:fade .2s}
 .convo-list button.unread b{color:#fff}.convo-list button.unread span{color:var(--ink)}
 .convo-list .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:6px}
+
+/* ---- V9.4 Turing machine calibration ---- */
+.turing .machine-head{align-items:center;margin-bottom:14px}
+.turing .counter{padding:0;font-size:12px;color:var(--ink)}
+.tape-strip{display:flex;gap:4px;overflow-x:auto;padding:14px 2px 10px;scrollbar-width:none;mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.tape-strip::-webkit-scrollbar{display:none}
+.tape-strip .cell{flex:none;width:30px;height:38px;border:1px solid var(--line);border-radius:6px;display:grid;place-items:center;font:600 12px var(--mono);color:var(--muted);background:var(--panel);position:relative;transition:all .25s}
+.tape-strip .cell.done{color:var(--gold);border-color:#f2c46d40;background:#f2c46d0d}
+.tape-strip .cell.head{border-color:var(--accent);background:#ff5a7a1a;transform:translateY(-3px);box-shadow:0 6px 18px -8px var(--accent)}
+.tape-strip .cell.head::before{content:'';position:absolute;top:-12px;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--accent)}
+.register{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;font:10px var(--mono);letter-spacing:.12em;color:var(--muted);margin:6px 0 4px}
+.register-bar{height:4px;background:var(--line);border-radius:4px;overflow:hidden}
+.register-bar i{display:block;height:100%;background:var(--grad);transition:width .4s ease}
+.register b{font:600 12px var(--mono);color:var(--ink);min-width:38px;text-align:right}
+.q-text{animation:qin .3s ease}
+@keyframes qin{from{opacity:0;transform:translateY(8px)}}
+.turing .choices button{padding:18px}
+.halt{border:1px dashed var(--accent);border-radius:16px;padding:40px 20px;margin:34px 0;text-align:center;display:grid;gap:8px;animation:pulse 1s ease infinite alternate}
+.halt b{font:700 18px var(--mono);letter-spacing:.2em;color:var(--accent)}
+.halt span{color:var(--muted);font-size:13px}
+@keyframes pulse{to{border-color:var(--gold)}}
+.turing-intro .intro-tape{display:flex;gap:4px;margin:26px 0 18px}
+.turing-intro .intro-tape span{width:26px;height:34px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.turing-intro .intro-tape span.head{border-color:var(--accent);background:#ff5a7a1a}
+.intro-points{margin:0;padding-left:18px;color:var(--muted);line-height:2;font-size:14px}
+.readout{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 16px}
+.readout>div{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.readout small{display:block;font:10px var(--mono);letter-spacing:.12em;color:var(--muted)}
+.readout b{display:block;font-size:20px;margin-top:4px}
+.readout p{grid-column:1/-1;margin:0}

@@ -1,16 +1,16 @@
 'use client'
 
-import { useState } from 'react'
-import { ArrowLeft, ArrowRight, Camera, ChevronDown, MapPin, Sparkles, Zap } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowLeft, ArrowRight, Camera, ChevronDown, MapPin, Sparkles } from 'lucide-react'
 import { INTENT_LABEL, INTERESTS, OPEN_TO, PROMPTS, type Gender, type Intent, type Person, type PromptAnswer, type Seeking } from '@/lib/social'
 import { FEATURES, QUESTIONS } from '@/lib/pulse-model'
 import { AXES, typeInfo, type Jung } from '@/lib/jung'
+import { TraitKalman } from '@/lib/trait-kalman'
 import { Chips, Portrait, Segmented } from './ui'
 
 export type Draft = Omit<Person, 'vector' | 'archetype' | 'archetypeCode' | 'jung'> & { vector?: number[]; jung?: Jung }
 
 const YEARS = ['1st year', '2nd year', '3rd year', '4th year', '5th year', 'Masters', 'PhD']
-export const QUICK = 12
 
 /** Profile builder. `mode="edit"` skips the quiz. */
 export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onDone, onCancel, saving }: {
@@ -95,48 +95,67 @@ export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onD
       <div className="builder-foot">
         {step > 0 ? <button type="button" className="ghost-button" onClick={() => setStep(step - 1)}><ArrowLeft size={16} /> Back</button> : onCancel ? <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button> : <span />}
         <button type="button" className="primary-button" disabled={!valid[step] || saving} onClick={() => last ? onDone(d) : setStep(step + 1)}>
-          {mode === 'edit' && last ? (saving ? 'Saving…' : 'Save profile') : step === 3 ? <>Personality quiz <Sparkles size={16} /></> : <>Continue <ArrowRight size={16} /></>}
+          {mode === 'edit' && last ? (saving ? 'Saving…' : 'Save profile') : step === 3 ? <>Calibrate the machine <Sparkles size={16} /></> : <>Continue <ArrowRight size={16} /></>}
         </button>
       </div>
     </section>
   )
 }
 
-/** Lets people pick a quick or full quiz, then runs it. */
+/** Turing Connection Engine intro, then the 36-question calibration. */
 export function QuizIntro({ onDone, onBack }: { onDone: (answers: number[]) => void; onBack?: () => void }) {
-  const [len, setLen] = useState<number | null>(null)
-  if (len) return <Calibration total={len} onBack={() => setLen(null)} onDone={onDone} />
+  const [started, setStarted] = useState(false)
+  if (started) return <Calibration onBack={() => setStarted(false)} onDone={onDone} />
   return (
-    <section className="builder">
-      <span className="panel-kicker">PERSONALITY QUIZ</span>
-      <h2>How do you <em>tick?</em></h2>
-      <p className="muted">Quick everyday questions — no right answers. Pulse uses them to find people you&apos;ll naturally get along with, and shows you a simple personality type at the end.</p>
-      <div className="quiz-options">
-        <button onClick={() => setLen(QUICK)}><Zap size={20} /><b>Quick</b><span>{QUICK} questions · ~1 min</span></button>
-        <button onClick={() => setLen(QUESTIONS.length)}><Sparkles size={20} /><b>Full</b><span>{QUESTIONS.length} questions · ~4 min · more accurate</span></button>
-      </div>
-      {onBack && <div className="builder-foot"><button type="button" className="ghost-button" onClick={onBack}><ArrowLeft size={16} /> Back</button><span /></div>}
+    <section className="builder turing-intro">
+      <span className="panel-kicker">TURING CONNECTION ENGINE <span>V9.4</span></span>
+      <h2>Calibrate <em>the machine</em></h2>
+      <p className="muted">36 everyday questions. There are no right answers — pick whatever feels closest. The machine reads each answer like a cell on a tape and builds a picture of how you tick, getting more certain with every step.</p>
+      <div className="intro-tape" aria-hidden>{Array.from({ length: 12 }, (_, i) => <span key={i} className={i === 0 ? 'head' : ''} />)}</div>
+      <ul className="intro-points"><li>About 4 minutes</li><li>Answers stay private — only your match % is shared</li><li>You can go back and change an answer</li></ul>
+      <div className="builder-foot">{onBack ? <button type="button" className="ghost-button" onClick={onBack}><ArrowLeft size={16} /> Back</button> : <span />}<button className="primary-button" onClick={() => setStarted(true)}>Start calibration <ArrowRight size={16} /></button></div>
     </section>
   )
 }
 
-export function Calibration({ total, onDone, onBack }: { total: number; onDone: (answers: number[]) => void; onBack?: () => void }) {
+export function Calibration({ onDone, onBack }: { onDone: (answers: number[]) => void; onBack?: () => void }) {
   const [answers, setAnswers] = useState<number[]>([])
-  const q = answers.length
-  const item = QUESTIONS[Math.min(q, total - 1)]
-  const pick = (i: number) => { const next = [...answers, i]; if (next.length === total) onDone(next); else setAnswers(next) }
+  const [halting, setHalting] = useState(false)
+  const tapeRef = useRef<HTMLDivElement>(null)
+  const total = QUESTIONS.length, q = Math.min(answers.length, total - 1), item = QUESTIONS[q]
+  // Re-run the Kalman filter over the answers so far (cheap: 36 small updates).
+  const live = useMemo(() => { const kf = new TraitKalman(); answers.forEach((a, i) => kf.update(i, a)); return kf }, [answers])
+  const certainty = Math.round(live.certainty() * 100)
+  useEffect(() => { tapeRef.current?.querySelector('.cell.head')?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }) }, [answers.length])
+  const pick = (i: number) => {
+    if (halting) return
+    const next = [...answers, i]
+    setAnswers(next)
+    if (next.length === total) { setHalting(true); setTimeout(() => onDone(next), 900) }
+  }
   return (
-    <section className="calibration">
+    <section className={`calibration turing${halting ? ' halting' : ''}`}>
       <div className="machine-head">
-        <div><span className="panel-kicker">PERSONALITY QUIZ <span>{item.domain}</span></span><h2>Question <em>{String(q + 1).padStart(2, '0')}</em></h2></div>
-        <div className="counter">{q + 1} / {total}</div>
+        <span className="panel-kicker">TURING CONNECTION ENGINE <span>{halting ? 'HALT' : item.domain}</span></span>
+        <div className="counter">{String(Math.min(answers.length + 1, total)).padStart(2, '0')} / {total}</div>
       </div>
-      <div className="tape"><span style={{ width: `${((q + 1) / total) * 100}%` }} /></div>
-      <h3>{item.text}</h3>
-      <div className="choices">{item.options.map((c, i) => <button key={c} onClick={() => pick(i)}><span>{String.fromCharCode(65 + i)}</span>{c}</button>)}</div>
+      <div className="tape-strip" ref={tapeRef} aria-label={`Question ${answers.length + 1} of ${total}`}>
+        {QUESTIONS.map((_, i) => <span key={i} className={`cell${i < answers.length ? ' done' : ''}${i === answers.length && !halting ? ' head' : ''}`}>{i < answers.length ? String.fromCharCode(65 + answers[i]) : ''}</span>)}
+      </div>
+      <div className="register">
+        <span>STATE CERTAINTY</span>
+        <div className="register-bar"><i style={{ width: `${certainty}%` }} /></div>
+        <b>{certainty}%</b>
+      </div>
+      {halting
+        ? <div className="halt"><b>MACHINE HALTED</b><span>Computing your profile…</span></div>
+        : <>
+          <h3 key={q} className="q-text">{item.text}</h3>
+          <div className="choices" key={`c${q}`}>{item.options.map((c, i) => <button key={c} onClick={e => { e.currentTarget.blur(); pick(i) }}><span>{String.fromCharCode(65 + i)}</span>{c}</button>)}</div>
+        </>}
       <div className="machine-foot">
-        <button type="button" className="ghost-button" onClick={() => q ? setAnswers(answers.slice(0, -1)) : onBack?.()}><ArrowLeft size={14} /> {q ? 'Previous' : 'Back'}</button>
-        <span>Answers stay private.</span>
+        <button type="button" className="ghost-button" disabled={halting} onClick={() => answers.length ? setAnswers(answers.slice(0, -1)) : onBack?.()}><ArrowLeft size={14} /> {answers.length ? 'Previous' : 'Back'}</button>
+        <span>Choose the closest fit</span>
       </div>
     </section>
   )

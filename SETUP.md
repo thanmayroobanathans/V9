@@ -1,22 +1,31 @@
-# VIT PULSE V9.3
+# VIT PULSE V9.4
 
 A swipe-to-match app for VIT students. Swipe right to like and left to pass. When two people like each other they match and can chat one-to-one.
 
 ## Features
 
 - **Profile:** name, age (18+), program and year, who you are and who you want to see, what you're looking for, photo, bio, status, interests, "open to", and two prompts.
-- **Personality quiz:** quick (12 questions) or full (36). People see a simple personality type (e.g. "The Spark ✨") with four plain-language sliders. The maths stays in the background.
+- **Turing Connection Engine:** the 36-question personality calibration, styled as a Turing machine. A tape of 36 cells is read one by one, with a live "state certainty" readout, ending in "MACHINE HALTED". People see a simple personality type (e.g. "The Spark ✨"), four plain-language sliders, and the machine's certainty and answer consistency. The maths stays in the background.
 - **Swipe:** a card deck ranked by match %, with plain-English reasons ("You're both night owls", "Into Coding, Music"). You can filter by age and by what people are looking for.
 - **Matches & chat:** a match is only created when both people liked each other (enforced in `firestore.rules`). Chats are live, with icebreakers, unread badges, a pop-up for new messages in any conversation, offline sending, and "load earlier" paging.
 - **Lifestyle matching (optional):** location is used in the background to learn your daily rhythm. It is never shown to anyone, and no coordinates are stored.
 
 ## How matching works (background)
 
-1. **Original algorithm, unchanged.** `compatibility()` in `lib/pulse-model.ts` (variance-weighted distance plus cosine similarity over 11 traits) is still the core of every score.
-2. **Better input from behaviour.** GPS is smoothed on the phone by a 2-D constant-velocity **Kalman filter** (`lib/kalman.ts`). In simulation it cut error from 25 m to 5 m while sitting still and from 26 m to 18 m while walking, and dropped wild fixes. The smoothed track never leaves the phone. From it, `lib/nature.ts` derives lifestyle features: roaming range, variety, routine, activity, night-owl and early-bird. These nudge each person's 11 traits slightly (at most ±0.12, scaled by confidence) before the original algorithm runs.
-3. **Bounded context adjustment (at most ±12 points):** similar daily rhythm, usually in the same ~1 km area, shared interests, the same intent, and a background Jung-style personality fit (`lib/jung.ts`).
+1. **Turing machine → Kalman filter.** The 36 answers are read by a full-covariance Kalman filter (`lib/trait-kalman.ts`). Your 11 traits are the hidden state. Each answer is a noisy measurement of where you lean compared with the options you *didn't* pick. The full 11×11 covariance lets traits that move together (openness, novelty, intellect…) share evidence instead of being counted twice. Answers that sharply contradict the rest are down-weighted. The filter also reports certainty and answer consistency.
+2. **Original algorithm, unchanged.** `compatibility()` in `lib/pulse-model.ts` (variance-weighted distance plus cosine similarity) still compares two people. It now runs on the Kalman traits, and the result is mapped onto a stable display scale.
+3. **Lifestyle from GPS (optional).** A separate 2-D Kalman filter smooths GPS on the phone (`lib/kalman.ts`). Lifestyle features derived from it (`lib/nature.ts`) slightly refine the traits. Location is never shown and no coordinates are stored.
+4. **Bounded context (at most ±12 points):** daily rhythm, same ~1 km area, shared interests, the same intent, and a background Jung-style fit.
 
-Only the derived features and a ~1.2 km area code are saved, and neither is ever displayed.
+### Benchmark (simulated test takers with known traits, 150 people)
+
+| | old additive scorer | Kalman engine |
+|---|---|---|
+| Trait recovery (correlation with true traits) | 0.34 | **0.54** |
+| Match-ranking agreement with true compatibility (Spearman ρ) | 0.29 | **0.36** |
+| True best match appears in their top 10 | 25 % | **31 %** |
+
+The Kalman engine also scored higher on trait recovery and match ranking with noisier answers and with 20 % careless clicks. These are simulations built on the quiz's own answer model, not data from real students.
 
 ## Chat at scale
 

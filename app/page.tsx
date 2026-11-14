@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { onAuthStateChanged, type User } from 'firebase/auth'
 import { ArrowRight, Flame, Heart, LockKeyhole, LogOut, MessageSquare, Pencil, RefreshCw, Settings, Sparkles, UserRound } from 'lucide-react'
 import { auth, firebaseConfigured, signInWithGoogle, signOut } from '@/lib/firebase'
-import { classify, scoreAnswers } from '@/lib/pulse-model'
+import { classify } from '@/lib/pulse-model'
+import { estimateTraits } from '@/lib/trait-kalman'
 import { jungFromAnswers, typeInfo } from '@/lib/jung'
 import { fit, jungOf } from '@/lib/match'
 import { GeoKalman } from '@/lib/kalman'
@@ -34,7 +35,8 @@ function useLocal<T>(key: string, init: T): [T, (v: T | ((x: T) => T)) => void] 
   const set = useCallback((x: T | ((p: T) => T)) => setV(p => { const n = typeof x === 'function' ? (x as (p: T) => T)(p) : x; try { localStorage.setItem(key, JSON.stringify(n)) } catch { /* ignore */ } return n }), [key])
   return [v, set]
 }
-const isReady = (p: Person | null): p is Person => !!p && !!p.vector?.length && p.age >= 18 && !!p.gender && Array.isArray(p.openTo)
+// Profiles calibrated before the Kalman engine (no `certainty`) recalibrate once so everyone is scored the same way.
+const isReady = (p: Person | null): p is Person => !!p && !!p.vector?.length && p.age >= 18 && !!p.gender && Array.isArray(p.openTo) && typeof p.certainty === 'number'
 
 export default function Page() {
   const [user, setUser] = useState<User | null>(null)
@@ -147,10 +149,13 @@ export default function Page() {
     finally { setSaving(false) }
   }
   async function finishBuild(d: Draft, answers?: number[]) {
-    const vector = answers ? scoreAnswers(answers).map(v => Math.round(v * 1000) / 1000) : (me?.vector ?? d.vector ?? [])
+    // The Turing machine: a full-covariance Kalman filter reads the 36 answers into 11 traits.
+    const est = answers ? estimateTraits(answers) : null
+    const vector = est ? est.vector : (me?.vector ?? d.vector ?? [])
     const jung = answers ? jungFromAnswers(answers) : (me ? jungOf(me) : d.jung!)
     const c = classify(vector).primary
-    const p: Person = { ...d, uid: user!.uid, vector, jung, archetype: c.name, archetypeCode: c.code, nature: me?.nature ?? d.nature ?? null, area: me?.area ?? d.area ?? null, activeAt: Date.now() }
+    const p: Person = { ...d, uid: user!.uid, vector, jung, archetype: c.name, archetypeCode: c.code,
+      certainty: est ? est.certainty : (me?.certainty ?? d.certainty), consistency: est ? est.consistency : (me?.consistency ?? d.consistency), nature: me?.nature ?? d.nature ?? null, area: me?.area ?? d.area ?? null, activeAt: Date.now() }
     setMe(p); setEditing(null)
     if (stage === 'build') setStage('reveal')
     else if (answers) setTab('profile')
@@ -253,8 +258,9 @@ export default function Page() {
   if (stage === 'build') return <main className="solo">{error && <p className="error banner" onClick={() => setError('')}>{error}</p>}<ProfileBuilder initial={blankDraft} mode="onboard" locationOn={geo === 'on' || geo === 'asking'} requestLocation={() => setWantLocation(true)} onDone={finishBuild} saving={saving} /></main>
   if (stage === 'reveal' && me) return (
     <main className="solo"><section className="builder">
-      <span className="panel-kicker">ALL SET</span><h2>Meet <em>you</em></h2>
+      <span className="panel-kicker">MACHINE HALTED <span>36 / 36</span></span><h2>Meet <em>you</em></h2>
       <TypeCard jung={me.jung} />
+      <Readout me={me} />
       <p className="muted">Pulse uses this, your interests{wantLocation ? ' and your daily rhythm' : ''} to rank people you&apos;re likely to click with. Every card tells you why.</p>
       <button className="primary-button wide" onClick={() => { setStage('app'); setTab('swipe') }}>Start swiping <ArrowRight size={16} /></button>
     </section></main>
@@ -306,6 +312,7 @@ export default function Page() {
               </div>
               <h4>Personality <button className="link-button" onClick={() => setEditing('quiz')}>Retake quiz</button></h4>
               <TypeCard jung={jungOf(me)} />
+              <Readout me={me} />
               {wantLocation && <p className="muted small">{myTags.length ? `From your daily rhythm: ${myTags.join(' · ')}.` : 'Pulse is still learning your daily rhythm — this takes a few days of normal use.'}</p>}
               <TraitDetails vector={me.vector} code={typeInfo(jungOf(me)).code} />
             </section>
@@ -333,6 +340,19 @@ export default function Page() {
       )}
       {celebrate && <MatchModal me={me} other={celebrate.other} onClose={() => setCelebrate(null)} onChat={() => { openChat(celebrate.matchId); setCelebrate(null) }} />}
       {toast && <button className="toast" onClick={() => toast.matchId && openChat(toast.matchId)}>💬 {toast.text}</button>}
+    </div>
+  )
+}
+
+/** Plain-language summary of what the machine learned (no maths on screen). */
+function Readout({ me }: { me: Person }) {
+  if (me.certainty === undefined && me.consistency === undefined) return null
+  const cert = Math.round((me.certainty ?? 0) * 100), cons = me.consistency ?? 1
+  return (
+    <div className="readout">
+      <div><small>MACHINE CERTAINTY</small><b>{cert}%</b></div>
+      <div><small>ANSWER CONSISTENCY</small><b>{cons >= 0.7 ? 'High' : cons >= 0.4 ? 'Medium' : 'Low'}</b></div>
+      {cons < 0.4 && <p className="muted small">Some answers pulled in different directions. Matches still work — retaking the calibration later will sharpen them.</p>}
     </div>
   )
 }

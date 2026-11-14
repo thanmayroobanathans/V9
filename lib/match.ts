@@ -8,8 +8,9 @@ import type { Person } from './social'
  *
  * The core is the ORIGINAL V7 compatibility algorithm (`compatibility` in pulse-model: a blend of
  * variance-weighted Euclidean similarity and cosine similarity over the 11 traits) — unchanged.
+ * Its inputs now come from the Turing-machine Kalman filter over the 36 answers (trait-kalman.ts).
  *
- * What V9 adds is better input and context:
+ * What V9 adds on top is better input and context:
  *  1. Behaviour-adjusted vectors — each person's 11 traits are refined by lifestyle signals
  *     learned on-device from Kalman-smoothed location (see nature.ts), weighted by confidence.
  *  2. A bounded context adjustment (never more than ±12 points), from:
@@ -33,7 +34,9 @@ const jaccard = (a: string[] = [], b: string[] = []) => {
 
 export function fit(me: Person, other: Person): Fit {
   const va = adjustVector(me.vector, me.nature), vb = adjustVector(other.vector, other.nature)
-  const base = compatibility(va, vb) // original algorithm
+  // Original algorithm on Kalman-estimated traits, then calibrated to a stable display scale
+  // (typical pair ≈ 70 %, top 10 % ≈ 85 %+). Monotonic, so the ranking is untouched.
+  const base = Math.max(30, Math.min(99, Math.round(70 + (compatibility(va, vb) - 76) * 1.5)))
   let adj = 0
   const reasons: string[] = []
 
