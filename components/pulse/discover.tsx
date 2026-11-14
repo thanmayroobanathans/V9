@@ -82,7 +82,6 @@ function SwipeCard({ me, p, f, depth, onSwipe }: { me: Person; p: Person; f: Fit
         onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
         <Portrait name={p.name} photoURL={p.photoURL} hue={p.hue}>
           {stamp && <span className={`stamp ${stamp}`}>{stamp === 'like' ? 'LIKE' : stamp === 'nope' ? 'NOPE' : 'SUPER'}</span>}
-          {p.sample && <span className="sample-tag">SAMPLE</span>}
           {isActive(p) && <span className="live-tag">● Active now</span>}
           <div className="card-overlay">
             <div className="card-title">
@@ -118,7 +117,7 @@ export function ProfileDetail({ me, p, f }: { me: Person; p: Person; f: Fit }) {
   const common = p.interests.filter(i => me.interests.includes(i))
   const tags = natureTags(p.nature)
   return <>
-    <div className="detail-head"><h3>{p.name}, {p.age}{p.username && <small className="handle">@{p.username}</small>}{p.sample && <small className="sample-tag inline">SAMPLE</small>}</h3><Ring value={f.score} size={48} /></div>
+    <div className="detail-head"><h3>{p.name}, {p.age}{p.username && <small className="handle">@{p.username}</small>}</h3><Ring value={f.score} size={48} /></div>
     <span className="tag">{INTENT_LABEL[p.intent] ?? 'Open to see'}</span> {quizTaken(p) && <span className="tag soft">{t.emoji} {t.name}</span>}{tags.map(x => <span key={x} className="tag soft"> {x}</span>)}
     {p.bio && <p>{p.bio}</p>}
     <h4>{fitLabel(f.score)}</h4>

@@ -73,7 +73,6 @@ function Terms() {
     <h4>7. Disclaimers and law</h4>
     <ul>
       <li>Match scores and personality types are estimates for fun and guidance, not professional advice. The app is provided &ldquo;as is&rdquo; to the extent permitted by law.</li>
-      <li>Profiles marked SAMPLE are fictional demonstrations.</li>
       <li>These Terms are governed by the laws of India. Courts at Vellore, Tamil Nadu have jurisdiction, subject to any consumer-protection rights you have.</li>
       <li>You can stop using the app and delete your account at any time in Settings.</li>
     </ul>

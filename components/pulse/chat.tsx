@@ -32,7 +32,7 @@ export function Inbox({ me, matches, people, lastRead, onOpen }: {
           const uid = otherOf(m, me.uid), o = m.members[uid], p = people[uid], unread = isUnread(m, me.uid, lastRead)
           return <button key={m.id} className={unread ? 'unread' : ''} onClick={() => onOpen(m.id)}>
             <Avatar name={o?.name} photoURL={o?.photoURL} hue={o?.hue ?? 0} />
-            <div><b>{o?.name}{m.sample && <small className="sample-tag inline">SAMPLE</small>}</b><span>{m.lastSender === me.uid ? 'You: ' : ''}{m.lastMessage}</span></div>
+            <div><b>{o?.name}</b><span>{m.lastSender === me.uid ? 'You: ' : ''}{m.lastMessage}</span></div>
             <em>{unread ? <i className="dot" /> : null}{ago(m.lastAt)}{p ? ` · ${fit(me, p).score}%` : ''}</em>
           </button>
         })}</div>

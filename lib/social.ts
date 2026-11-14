@@ -49,10 +49,9 @@ export type Person = {
   area: string | null
   activeAt: number
   visible: boolean
-  sample?: boolean
 }
 
-export type Match = { id: string; via?: 'swipe' | 'follow'; memberUids: string[]; members: Record<string, { name: string; photoURL: string | null; hue: number }>; lastMessage: string; lastSender: string; lastAt: number; status: 'open' | 'closed'; sample?: boolean }
+export type Match = { id: string; via?: 'swipe' | 'follow'; memberUids: string[]; members: Record<string, { name: string; photoURL: string | null; hue: number }>; lastMessage: string; lastSender: string; lastAt: number; status: 'open' | 'closed' }
 export type Message = { id: string; senderUid: string; text: string; at: number; pending?: boolean }
 
 export const INTERESTS = ['Coding', 'Hackathons', 'Music', 'Gym', 'Badminton', 'Cricket', 'Football', 'Photography', 'Anime', 'Movies', 'Gaming', 'Reading', 'Startups', 'Dance', 'Travel', 'Cooking', 'Chai', 'Coffee', 'Art', 'Poetry', 'Debate', 'Robotics', 'Fashion', 'Night walks', 'K-drama', 'Podcasts', 'Volunteering', 'Riviera']
@@ -77,7 +76,7 @@ export async function loadPerson(uid: string) {
   return snap.exists() ? toPerson(uid, snap.data()) : null
 }
 export async function savePerson(p: Person) {
-  const { sample: _s, ...data } = p
+  const data = p
   // Older versions stored a coarse `loc`; remove it so no coordinates remain in public profiles.
   await setDoc(doc(need(), 'publicProfiles', p.uid), { ...data, loc: deleteField(), locAt: deleteField(), placeId: deleteField(), modelVersion: MODEL_VERSION, updatedAt: serverTimestamp() }, { merge: true })
 }

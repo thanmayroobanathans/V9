@@ -65,7 +65,3 @@ At login, people must tick "I'm 18+, a VIT student, and agree to the Terms of Us
 | `follows/{from}_{to}` | follow request: pending / accepted | the two people involved |
 | `users/{uid}/posts/{id}` + `likes` | posts and likes | owner and accepted followers |
 | `reports/{id}` | reports | nobody via the app (review in the Firebase console) |
-
-## Sample people
-
-While no other students are on the app, the Swipe deck shows 10 fictional people labelled **SAMPLE**. They live only in the browser and are never written to Firestore. You can turn them off in Settings.

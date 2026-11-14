@@ -13,10 +13,9 @@ import { areaCode, clearTrack, computeNature, natureTags, record } from '@/lib/n
 import { saveProfile, saveResult } from '@/lib/firestore'
 import { SIGNAL, features, newLearner, pack, unpack, update, type LearnerState } from '@/lib/learner'
 import {
-  loadMySwipes, loadPerson, loadTaste, saveTaste, acceptFollow, cancelFollow, claimUsername, deleteAccount, normaliseUsername, removeFollower, requestFollow, watchFollows, type Follow, pairId, savePerson, sendMessage, swipe, unmatch, updateSignals,
+  loadMySwipes, loadPerson, loadTaste, saveTaste, acceptFollow, cancelFollow, claimUsername, deleteAccount, normaliseUsername, removeFollower, requestFollow, watchFollows, type Follow, savePerson, sendMessage, swipe, unmatch, updateSignals,
   watchMatches, watchMessages, watchPeople, type Match, type Message, type Person, type Swipe,
 } from '@/lib/social'
-import { samplePeople, sampleReply } from '@/lib/samples'
 import { ProfileBuilder, QuizIntro, TraitDetails, TypeCard, type Draft } from '@/components/pulse/onboarding'
 import { Discover, ProfileDetail } from '@/components/pulse/discover'
 import { ChatView, Inbox, MatchModal, isUnread, matchStarters, otherOf } from '@/components/pulse/chat'
@@ -75,7 +74,6 @@ export default function Page() {
   const [stack, setStack] = useState<Screen[]>([])
   const push = (x: Screen) => setStack(st => [...st, x])
   const pop = () => setStack(st => st.slice(0, -1))
-  const [sampleFollows, setSampleFollows] = useState<string[]>([])
   const [confirmDelete, setConfirmDelete] = useState('')
   const [celebrate, setCelebrate] = useState<{ other: Person; matchId: string } | null>(null)
   const [chatId, setChatId] = useState<string | null>(null)
@@ -89,11 +87,6 @@ export default function Page() {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const seenAt = useRef<Record<string, number> | null>(null)
 
-  // ---------- sample preview (local only) ----------
-  const [useSamples, setUseSamples] = useLocal(`pulse93.samples.${uid}`, true)
-  const [sampleSwiped, setSampleSwiped] = useLocal<string[]>(`pulse93.sSwiped.${uid}`, [])
-  const [sampleMatches, setSampleMatches] = useLocal<Match[]>(`pulse93.sMatches.${uid}`, [])
-  const [sampleMsgs, setSampleMsgs] = useLocal<Record<string, Message[]>>(`pulse93.sMsgs.${uid}`, {})
 
   // ---------- auth + profile bootstrap ----------
   useEffect(() => {
@@ -202,14 +195,11 @@ export default function Page() {
     return () => subs.forEach(u => u())
   }, [stage, user])
 
-  // ---------- merged real + sample views ----------
-  const sPeople = useMemo(() => useSamples ? samplePeople(me?.area ?? null) : [], [useSamples, me?.area])
-  const realOthers = useMemo(() => people.filter(p => p.uid !== me?.uid), [people, me?.uid])
-  const allPeople = useMemo(() => [...realOthers, ...sPeople], [realOthers, sPeople])
+  // ---------- derived views ----------
+  const allPeople = useMemo(() => people.filter(p => p.uid !== me?.uid), [people, me?.uid])
   const byUid = useMemo(() => Object.fromEntries(allPeople.map(p => [p.uid, p])), [allPeople])
-  const allSwiped = useMemo(() => new Set([...swiped, ...sampleSwiped]), [swiped, sampleSwiped])
-  const candidates = useMemo(() => allPeople.filter(p => !allSwiped.has(p.uid)), [allPeople, allSwiped])
-  const allMatches = useMemo(() => [...matches, ...(useSamples ? sampleMatches.map(m => { const l = sampleMsgs[m.id] ?? [], last = l[l.length - 1]; return { ...m, lastMessage: last?.text ?? '', lastSender: last?.senderUid ?? '', lastAt: last?.at ?? m.lastAt } }) : [])], [matches, sampleMatches, sampleMsgs, useSamples])
+  const candidates = useMemo(() => allPeople.filter(p => !swiped.has(p.uid)), [allPeople, swiped])
+  const allMatches = matches
   const active = allMatches.find(m => m.id === chatId) ?? null
 
   // Incoming-message notifications across ALL threads (e.g. A and B both message C).
@@ -234,9 +224,9 @@ export default function Page() {
   useEffect(() => { setMsgCount(PAGE) }, [chatId])
   useEffect(() => {
     setMessages([]); setHasMore(false)
-    if (!chatId || !active || active.sample) return
+    if (!chatId || !active) return
     return watchMessages(chatId, msgCount, (m, more) => { setMessages(m); setHasMore(more) }, e => setError(`Chat unavailable — ${e.message}`))
-  }, [chatId, msgCount, !!active, active?.sample]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chatId, msgCount, !!active]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- actions ----------
   function learn(other: Person | undefined, y: number) {
@@ -251,15 +241,6 @@ export default function Page() {
   async function handleSwipe(p: Person, kind: Swipe) {
     if (!me) return
     learn(p, SIGNAL[kind])
-    if (p.sample) {
-      setSampleSwiped(s => [...s, p.uid])
-      if (kind !== 'pass' && (kind === 'super' || fit(me, p).score >= 66)) {
-        const id = pairId(me.uid, p.uid)
-        setSampleMatches(ms => ms.some(x => x.id === id) ? ms : [...ms, { id, sample: true, status: 'open', memberUids: [me.uid, p.uid], lastAt: Date.now(), lastMessage: '', lastSender: '', members: { [me.uid]: { name: me.name, photoURL: me.photoURL, hue: me.hue }, [p.uid]: { name: p.name, photoURL: null, hue: p.hue } } }])
-        setCelebrate({ other: p, matchId: id })
-      }
-      return
-    }
     setSwiped(s => new Set(s).add(p.uid))
     try { const id = await swipe(me, p, kind); if (id) setCelebrate({ other: p, matchId: id }) }
     catch (e) { setError(`Not saved — ${e instanceof Error ? e.message : 'write failed'}`) }
@@ -277,12 +258,6 @@ export default function Page() {
   async function handleSend(text: string) {
     if (!active || !me) return
     if (!chatted.includes(active.id)) { setChatted(c => [...c, active.id]); learn(byUid[otherOf(active, me.uid)], SIGNAL.chat) }
-    if (active.sample) {
-      const id = active.id, them = otherOf(active, me.uid), now = Date.now()
-      setSampleMsgs(x => ({ ...x, [id]: [...(x[id] ?? []), { id: `${now}`, senderUid: me.uid, text, at: now }] }))
-      setTimeout(() => setSampleMsgs(x => { const l = x[id] ?? []; const n = l.filter(m => m.senderUid === them).length; return { ...x, [id]: [...l, { id: `${Date.now()}r`, senderUid: them, text: sampleReply(n), at: Date.now() }] } }), 1400)
-      return
-    }
     try { await sendMessage(active.id, me.uid, text) } catch (e) { setError(`Message not sent — ${e instanceof Error ? e.message : 'write failed'}`) }
   }
 
@@ -318,7 +293,7 @@ export default function Page() {
   const top = stack[stack.length - 1]
   const followers = incoming.filter(f => f.status === 'accepted').length, followingN = outgoing.filter(f => f.status === 'accepted').length
   const pendingN = incoming.filter(f => f.status === 'pending').length
-  const fsOf = (p: Person): FollowState => p.sample ? (sampleFollows.includes(p.uid) ? 'following' : 'none') : followStateOf(p.uid)
+  const fsOf = (p: Person): FollowState => followStateOf(p.uid)
   const openPerson = (p: Person) => push({ kind: 'person', p })
 
   const screen = (() => {
@@ -328,7 +303,7 @@ export default function Page() {
       const p = top.p
       return <FullPage title={p.username || p.name} onBack={pop}>
         <ProfileScreen me={me} person={p} followState={fsOf(p)} followsMe={incoming.some(f => f.fromUid === p.uid && f.status === 'accepted')} chatId={chatWith(p.uid)}
-          onFollow={() => p.sample ? setSampleFollows(x => [...x, p.uid]) : follow(p)} onUnfollow={() => p.sample ? setSampleFollows(x => x.filter(u => u !== p.uid)) : unfollow(p.uid)}
+          onFollow={() => follow(p)} onUnfollow={() => unfollow(p.uid)}
           onMessage={id => { setStack([]); openChat(id) }} onReport={() => push({ kind: 'report', target: p })} />
       </FullPage>
     }
@@ -340,7 +315,6 @@ export default function Page() {
         <div className="settings">
           <button className="set-row" onClick={() => { const v = !wantLocation; setWantLocation(v); if (!v) { clearTrack(); updateSignals(me.uid, null, null).catch(() => {}); setMe({ ...me, nature: null, area: null }) } }}><span>Location<small>{geo === 'denied' ? 'Blocked in browser' : 'Improves matches · never shown'}</small></span><i className={`switch${wantLocation ? ' on' : ''}`} /></button>
           <button className="set-row" onClick={() => updateMe({ visible: !me.visible })}><span>Show my profile<small>Off pauses swiping</small></span><i className={`switch${me.visible ? ' on' : ''}`} /></button>
-          <button className="set-row" onClick={() => setUseSamples(!useSamples)}><span>Demo profiles</span><i className={`switch${useSamples ? ' on' : ''}`} /></button>
           <button className="set-row" onClick={() => setEditing('quiz')}><span>{quizTaken(me) ? 'Retake personality quiz' : 'Take personality quiz'}</span></button>
           <button className="set-row" onClick={() => push({ kind: 'report' })}><span>Report a problem</span></button>
           <button className="set-row" onClick={() => setLegal('terms')}><span>Terms of Use</span></button>
@@ -358,10 +332,10 @@ export default function Page() {
     if (tab === 'swipe') return <Discover me={me} candidates={candidates} taste={taste} onSwipe={handleSwipe} loading={!peopleLoaded} />
     if (tab === 'search') return <Search meUid={me.uid} onOpen={openPerson} />
     if (tab === 'matches') return active
-      ? <ChatView meUid={me.uid} messages={active.sample ? sampleMsgs[active.id] ?? [] : messages} hasMore={!active.sample && hasMore} onLoadMore={() => setMsgCount(c => c + PAGE)} onSend={handleSend} onBack={() => setChatId(null)}
+      ? <ChatView meUid={me.uid} messages={messages} hasMore={hasMore} onLoadMore={() => setMsgCount(c => c + PAGE)} onSend={handleSend} onBack={() => setChatId(null)}
           placeholder="Message…"
           header={(() => { const o = active.members[otherOf(active, me.uid)]; return <button className="chat-title" onClick={() => other && openPerson(other)}><Avatar name={o?.name} photoURL={o?.photoURL} hue={o?.hue ?? 0} size={34} /><span><b>{o?.name}</b><small>{other?.username ?? ''}</small></span></button> })()}
-          banner={<div className="chat-strip"><button className="link-button muted-link" onClick={async () => { if (active.sample) setSampleMatches(ms => ms.filter(m => m.id !== active.id)); else await unmatch(active.id).catch(() => {}); setChatId(null) }}>Unmatch</button></div>}
+          banner={<div className="chat-strip"><button className="link-button muted-link" onClick={async () => { await unmatch(active.id).catch(() => {}); setChatId(null) }}>Unmatch</button></div>}
           footer={active.status === 'closed' ? <div className="composer closed">Chat closed</div> : undefined}
           empty={<><Avatar name={active.members[otherOf(active, me.uid)]?.name} photoURL={active.members[otherOf(active, me.uid)]?.photoURL} hue={active.members[otherOf(active, me.uid)]?.hue ?? 0} size={88} /><b>{active.members[otherOf(active, me.uid)]?.name}</b><span className="muted">Say hi 👋</span></>}
           starters={matchStarters(me, other)} />
