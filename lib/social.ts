@@ -52,7 +52,7 @@ export type Person = {
 }
 
 export type Match = { id: string; via?: 'swipe' | 'follow'; memberUids: string[]; members: Record<string, { name: string; photoURL: string | null; hue: number }>; lastMessage: string; lastSender: string; lastAt: number; status: 'open' | 'closed' }
-export type Message = { id: string; senderUid: string; text: string; at: number; pending?: boolean }
+export type Message = { id: string; senderUid: string; senderName?: string; text: string; at: number; pending?: boolean }
 
 export const INTERESTS = ['Coding', 'Hackathons', 'Music', 'Gym', 'Badminton', 'Cricket', 'Football', 'Photography', 'Anime', 'Movies', 'Gaming', 'Reading', 'Startups', 'Dance', 'Travel', 'Cooking', 'Chai', 'Coffee', 'Art', 'Poetry', 'Debate', 'Robotics', 'Fashion', 'Night walks', 'K-drama', 'Podcasts', 'Volunteering', 'Riviera']
 export const OPEN_TO = ['Study buddy', 'Food runs', 'Sports', 'Project team', 'Exploring campus', 'Just chatting', 'Jam session', 'Gaming']
