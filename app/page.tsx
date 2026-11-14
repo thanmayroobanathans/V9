@@ -330,7 +330,24 @@ export default function Page() {
       </FullPage>
     )
     if (tab === 'swipe') return <Discover me={me} candidates={candidates} taste={taste} onSwipe={handleSwipe} loading={!peopleLoaded} />
-    if (tab === 'search') return <Search meUid={me.uid} onOpen={openPerson} />
+    if (tab === 'search') {
+      // "Suggested for you": best matches you don't follow yet, with a short human reason.
+      const suggestions = allPeople
+        .filter(p => p.username && followStateOf(p.uid) !== 'following')
+        .map(p => ({ p, f: fit(me, p, taste) }))
+        .sort((a, b) => b.f.score - a.f.score)
+        .slice(0, 25)
+        .map(({ p, f }) => {
+          const common = p.interests.filter(i => me.interests.includes(i))
+          const reason = p.program && p.program.toLowerCase() === me.program.toLowerCase() && p.year === me.year ? `Also ${p.program} · ${p.year}`
+            : common.length >= 2 ? `${common.length} shared interests`
+            : common.length === 1 ? `Also into ${common[0]}`
+            : p.program && p.program.toLowerCase() === me.program.toLowerCase() ? `Also ${p.program}`
+            : `${f.score}% match`
+          return { p, reason, state: followStateOf(p.uid) }
+        })
+      return <Search meUid={me.uid} onOpen={openPerson} suggestions={suggestions} onFollow={follow} />
+    }
     if (tab === 'matches') return active
       ? <ChatView meUid={me.uid} messages={messages} hasMore={hasMore} onLoadMore={() => setMsgCount(c => c + PAGE)} onSend={handleSend} onBack={() => setChatId(null)}
           placeholder="Message…"

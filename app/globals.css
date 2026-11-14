@@ -717,3 +717,9 @@ span.avatar-v9.ring{border:3px solid #000;box-shadow:0 0 0 2.5px transparent;bac
 .quiz-nudge>span:first-child{font-size:22px}
 .quiz-nudge span{display:grid}.quiz-nudge b{font-size:14px}.quiz-nudge small{color:var(--muted);font-size:12px}
 .ghost-button.wide{margin-top:8px;color:var(--ink)}
+.list-title{font:700 15px inherit;color:var(--ink);border:0;letter-spacing:0;text-transform:none;padding:0;margin:14px 0 4px}
+.row.suggest{padding:8px 16px;animation:pageIn .35s cubic-bezier(.2,.8,.2,1) both}
+.row-main{display:flex;align-items:center;gap:12px;flex:1;min-width:0;background:none;border:0;color:var(--ink);text-align:left;padding:0}
+.row-main>div{min-width:0}
+.row-main small{display:block;color:var(--muted);font-size:12px;margin-top:1px}
+.row .avatar-v9,.row-main .avatar-v9{display:inline-grid;place-items:center;color:#fff;font-size:inherit}

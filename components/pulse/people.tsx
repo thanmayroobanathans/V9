@@ -153,7 +153,8 @@ function NewPost({ uid, onDone }: { uid: string; onDone: () => void }) {
 // ---------------------------------------------------------------------------
 // Search by username
 // ---------------------------------------------------------------------------
-export function Search({ meUid, onOpen }: { meUid: string; onOpen: (p: Person) => void }) {
+export type Suggestion = { p: Person; reason: string; state: FollowState }
+export function Search({ meUid, onOpen, suggestions = [], onFollow }: { meUid: string; onOpen: (p: Person) => void; suggestions?: Suggestion[]; onFollow?: (p: Person) => void }) {
   const [q, setQ] = useState('')
   const [res, setRes] = useState<Person[]>([])
   const [loading, setLoading] = useState(false)
@@ -171,6 +172,20 @@ export function Search({ meUid, onOpen }: { meUid: string; onOpen: (p: Person) =
         {res.map(p => <button key={p.uid} className="row" onClick={() => onOpen(p)}><Avatar name={p.name} photoURL={p.photoURL} hue={p.hue} size={44} /><div><b>{p.username}</b><span>{p.name} · {p.program}</span></div></button>)}
       </div>
       {!loading && q.trim().length >= 2 && !res.length && <p className="muted small center">No accounts found</p>}
+      {q.trim().length < 2 && <>
+        <h4 className="list-title">Suggested for you</h4>
+        <div className="list">
+          {suggestions.map(({ p, reason, state }, i) => (
+            <div key={p.uid} className="row suggest" style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}>
+              <button className="row-main" onClick={() => onOpen(p)}><Avatar name={p.name} photoURL={p.photoURL} hue={p.hue} size={44} /><div><b>{p.username || p.name}</b><span>{p.name}</span><small>{reason}</small></div></button>
+              {state === 'none'
+                ? <button className="primary-button small" onClick={() => onFollow?.(p)}>Follow</button>
+                : <button className="secondary-button small" onClick={() => onOpen(p)}>{state === 'requested' ? 'Requested' : 'Following'}</button>}
+            </div>
+          ))}
+          {!suggestions.length && <p className="muted small center">No suggestions yet — more students are joining every day.</p>}
+        </div>
+      </>}
     </section>
   )
 }
