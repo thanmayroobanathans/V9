@@ -8,7 +8,7 @@ import {
 } from '@/lib/social'
 import { compressImage } from '@/lib/image'
 import { typeInfo } from '@/lib/jung'
-import { jungOf } from '@/lib/match'
+import { jungOf, quizTaken } from '@/lib/match'
 import { Avatar } from './ui'
 
 export type FollowState = 'none' | 'requested' | 'following'
@@ -26,11 +26,11 @@ export function Page({ title, onBack, right, children }: { title: string; onBack
 // ---------------------------------------------------------------------------
 // Profile — same layout for you and for others (Instagram style)
 // ---------------------------------------------------------------------------
-export function ProfileScreen({ me, person, followState, followsMe, chatId, counts, onFollow, onUnfollow, onMessage, onEdit, onSettings, onLists, onReport }: {
+export function ProfileScreen({ me, person, followState, followsMe, chatId, counts, onFollow, onUnfollow, onMessage, onEdit, onSettings, onLists, onReport, onQuiz }: {
   me: Person; person: Person; followState?: FollowState; followsMe?: boolean; chatId?: string | null
   counts?: { followers: number; following: number }
   onFollow?: () => void; onUnfollow?: () => void; onMessage?: (id: string) => void
-  onEdit?: () => void; onSettings?: () => void; onLists?: (tab: 'followers' | 'following') => void; onReport?: () => void
+  onEdit?: () => void; onSettings?: () => void; onLists?: (tab: 'followers' | 'following') => void; onReport?: () => void; onQuiz?: () => void
 }) {
   const isMe = me.uid === person.uid
   const canSee = isMe || followState === 'following'
@@ -56,10 +56,11 @@ export function ProfileScreen({ me, person, followState, followsMe, chatId, coun
       </div>
       <div className="ig-bio">
         <b>{person.name}</b>
-        <span className="ig-sub">{person.program} · {person.year} · {t.emoji} {t.name}</span>
+        <span className="ig-sub">{person.program} · {person.year}{quizTaken(person) ? ` · ${t.emoji} ${t.name}` : ''}</span>
         {person.bio && <p>{person.bio}</p>}
         {person.interests?.length > 0 && <span className="ig-tags">{person.interests.map(i => <em key={i} className={!isMe && me.interests.includes(i) ? 'common' : ''}>#{i.toLowerCase().replace(/\s+/g, '')}</em>)}</span>}
       </div>
+      {isMe && !quizTaken(person) && onQuiz && <button className="quiz-nudge" onClick={onQuiz}><span>✨</span><span><b>Take the personality quiz</b><small>Optional · 36 questions · better matches</small></span></button>}
       <div className="ig-actions">
         {isMe ? <>
           <button className="secondary-button" onClick={onEdit}>Edit profile</button>

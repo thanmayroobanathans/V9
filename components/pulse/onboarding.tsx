@@ -70,9 +70,13 @@ export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onD
         </button>
       </>}
 
-      <button type="button" className="primary-button wide" disabled={!valid[step] || saving} onClick={() => last ? onDone(d) : setStep(step + 1)}>
+      {mode === 'onboard' && step === 2 ? <>
+        <button type="button" className="primary-button wide" onClick={() => setStep(3)}>Take personality quiz</button>
+        <button type="button" className="ghost-button wide" disabled={saving} onClick={() => onDone(d)}>Skip for now</button>
+        <p className="muted small center">The quiz is optional and improves your matches. You can take it later from your profile.</p>
+      </> : <button type="button" className="primary-button wide" disabled={!valid[step] || saving} onClick={() => last ? onDone(d) : setStep(step + 1)}>
         {mode === 'edit' && last ? (saving ? 'Saving…' : 'Done') : 'Next'}
-      </button>
+      </button>}
     </section>
   )
 }

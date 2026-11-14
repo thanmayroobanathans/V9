@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Compass, Heart, Info, RefreshCw, SlidersHorizontal, Star, X } from 'lucide-react'
 import { INTENT_LABEL, genderMatches, isActive, type Intent, type Person, type Swipe } from '@/lib/social'
-import { fit, fitLabel, jungOf, type Fit } from '@/lib/match'
+import { fit, fitLabel, jungOf, quizTaken, type Fit } from '@/lib/match'
 import { natureTags } from '@/lib/nature'
 import type { LearnerState } from '@/lib/learner'
 import { typeInfo } from '@/lib/jung'
@@ -89,7 +89,7 @@ function SwipeCard({ me, p, f, depth, onSwipe }: { me: Person; p: Person; f: Fit
               <div><h3>{p.name}, {p.age}</h3><span>{p.program} · {p.year}</span></div>
               <Ring value={f.score} />
             </div>
-            <div className="card-meta"><b>{fitLabel(f.score)}</b> · {t.emoji} {t.name}{tags.length ? ` · ${tags[0]}` : ''}</div>
+            <div className="card-meta"><b>{fitLabel(f.score)}</b>{quizTaken(p) ? ` · ${t.emoji} ${t.name}` : ''}{tags.length ? ` · ${tags[0]}` : ''}</div>
             <p className="card-bio">{p.bio}</p>
             {isTop && <button className="info-button" aria-label="More about this person" onPointerDown={e => e.stopPropagation()} onClick={() => setOpen(true)}><Info size={16} /></button>}
           </div>
@@ -119,7 +119,7 @@ export function ProfileDetail({ me, p, f }: { me: Person; p: Person; f: Fit }) {
   const tags = natureTags(p.nature)
   return <>
     <div className="detail-head"><h3>{p.name}, {p.age}{p.username && <small className="handle">@{p.username}</small>}{p.sample && <small className="sample-tag inline">SAMPLE</small>}</h3><Ring value={f.score} size={48} /></div>
-    <span className="tag">{INTENT_LABEL[p.intent] ?? 'Open to see'}</span> <span className="tag soft">{t.emoji} {t.name}</span>{tags.map(x => <span key={x} className="tag soft"> {x}</span>)}
+    <span className="tag">{INTENT_LABEL[p.intent] ?? 'Open to see'}</span> {quizTaken(p) && <span className="tag soft">{t.emoji} {t.name}</span>}{tags.map(x => <span key={x} className="tag soft"> {x}</span>)}
     {p.bio && <p>{p.bio}</p>}
     <h4>{fitLabel(f.score)}</h4>
     {f.reasons.length > 0 && <ul className="why">{f.reasons.slice(0, 3).map(r => <li key={r}>{r}</li>)}</ul>}

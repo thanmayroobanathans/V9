@@ -7,7 +7,7 @@ import { auth, firebaseConfigured, signInWithGoogle, signOut } from '@/lib/fireb
 import { classify } from '@/lib/pulse-model'
 import { estimateTraits } from '@/lib/trait-kalman'
 import { jungFromAnswers, typeInfo } from '@/lib/jung'
-import { fit, jungOf } from '@/lib/match'
+import { fit, jungOf, quizTaken } from '@/lib/match'
 import { GeoKalman } from '@/lib/kalman'
 import { areaCode, clearTrack, computeNature, natureTags, record } from '@/lib/nature'
 import { saveProfile, saveResult } from '@/lib/firestore'
@@ -174,11 +174,14 @@ export default function Page() {
     }
     // A full-covariance Kalman filter reads the 36 answers into 11 traits.
     const est = answers ? estimateTraits(answers) : null
-    const vector = est ? est.vector : (me?.vector ?? d.vector ?? [])
-    const jung = answers ? jungFromAnswers(answers) : (me ? jungOf(me) : d.jung!)
+    // Skipping the quiz starts everyone from a neutral profile (certainty 0); matching then relies on
+    // interests, intent, location and the taste learner until the quiz is taken.
+    const neutral = !est && !me?.vector?.length && !d.vector?.length
+    const vector = est ? est.vector : neutral ? new Array(11).fill(0.5) : (me?.vector ?? d.vector!)
+    const jung = answers ? jungFromAnswers(answers) : neutral ? { ei: 0.5, ns: 0.5, tf: 0.5, jp: 0.5 } : (me ? jungOf(me) : d.jung!)
     const c = classify(vector).primary
     const p: Person = { ...d, uid: user!.uid, vector, jung, archetype: c.name, archetypeCode: c.code,
-      certainty: est ? est.certainty : (me?.certainty ?? d.certainty), nature: me?.nature ?? d.nature ?? null, area: me?.area ?? d.area ?? null, activeAt: Date.now() }
+      certainty: est ? est.certainty : neutral ? 0 : (me?.certainty ?? d.certainty ?? 0), nature: me?.nature ?? d.nature ?? null, area: me?.area ?? d.area ?? null, activeAt: Date.now() }
     setMe(p); setEditing(null)
     if (stage === 'build') setStage('reveal')
     else if (answers) setTab('profile')
@@ -304,7 +307,7 @@ export default function Page() {
     <main className="solo"><section className="builder page-in reveal">
       <Avatar name={me.name} photoURL={me.photoURL} hue={me.hue} size={96} ring />
       <h2 className="step-title">You&apos;re all set, {me.name}</h2>
-      <TypeCard jung={me.jung} />
+      {quizTaken(me) ? <TypeCard jung={me.jung} /> : <p className="muted center">You can take the personality quiz anytime from your profile.</p>}
       <button className="primary-button wide" onClick={() => { setStage('app'); setTab('swipe') }}>Start</button>
     </section></main>
   )
@@ -338,7 +341,7 @@ export default function Page() {
           <button className="set-row" onClick={() => { const v = !wantLocation; setWantLocation(v); if (!v) { clearTrack(); updateSignals(me.uid, null, null).catch(() => {}); setMe({ ...me, nature: null, area: null }) } }}><span>Location<small>{geo === 'denied' ? 'Blocked in browser' : 'Improves matches · never shown'}</small></span><i className={`switch${wantLocation ? ' on' : ''}`} /></button>
           <button className="set-row" onClick={() => updateMe({ visible: !me.visible })}><span>Show my profile<small>Off pauses swiping</small></span><i className={`switch${me.visible ? ' on' : ''}`} /></button>
           <button className="set-row" onClick={() => setUseSamples(!useSamples)}><span>Demo profiles</span><i className={`switch${useSamples ? ' on' : ''}`} /></button>
-          <button className="set-row" onClick={() => setEditing('quiz')}><span>Retake personality quiz</span></button>
+          <button className="set-row" onClick={() => setEditing('quiz')}><span>{quizTaken(me) ? 'Retake personality quiz' : 'Take personality quiz'}</span></button>
           <button className="set-row" onClick={() => push({ kind: 'report' })}><span>Report a problem</span></button>
           <button className="set-row" onClick={() => setLegal('terms')}><span>Terms of Use</span></button>
           <button className="set-row" onClick={() => setLegal('privacy')}><span>Privacy Policy</span></button>
@@ -363,7 +366,7 @@ export default function Page() {
           empty={<><Avatar name={active.members[otherOf(active, me.uid)]?.name} photoURL={active.members[otherOf(active, me.uid)]?.photoURL} hue={active.members[otherOf(active, me.uid)]?.hue ?? 0} size={88} /><b>{active.members[otherOf(active, me.uid)]?.name}</b><span className="muted">Say hi 👋</span></>}
           starters={matchStarters(me, other)} />
       : <><Requests incoming={incoming} onAccept={accept} onDecline={f => removeFollower(me.uid, f.fromUid).catch(() => {})} /><Inbox me={me} matches={allMatches} people={byUid} lastRead={lastRead} onOpen={openChat} /></>
-    return <ProfileScreen me={me} person={me} counts={{ followers, following: followingN }} onEdit={() => setEditing('profile')} onSettings={() => push({ kind: 'settings' })} onLists={t => push({ kind: 'lists', tab: t })} />
+    return <ProfileScreen me={me} person={me} counts={{ followers, following: followingN }} onEdit={() => setEditing('profile')} onQuiz={() => setEditing('quiz')} onSettings={() => push({ kind: 'settings' })} onLists={t => push({ kind: 'lists', tab: t })} />
   })()
 
   const fullscreen = !!editing || !!top || (tab === 'matches' && !!active)

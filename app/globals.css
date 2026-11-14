@@ -712,3 +712,8 @@ span.avatar-v9.ring{border:3px solid #000;box-shadow:0 0 0 2.5px transparent;bac
 .ring-wrap{display:inline-grid;place-items:center;border-radius:50%;background:var(--grad);flex:none;padding:0}
 .ring-gap{display:grid;place-items:center;border-radius:50%;background:#000;padding:2px}
 .page-body>.profile{padding:0 16px}
+.quiz-nudge{display:flex;align-items:center;gap:12px;width:100%;margin:12px 0 0;padding:12px 14px;border-radius:12px;border:1px solid #262626;background:#121212;color:var(--ink);text-align:left;transition:background .2s}
+.quiz-nudge:active{background:#1c1c1c}
+.quiz-nudge>span:first-child{font-size:22px}
+.quiz-nudge span{display:grid}.quiz-nudge b{font-size:14px}.quiz-nudge small{color:var(--muted);font-size:12px}
+.ghost-button.wide{margin-top:8px;color:var(--ink)}

@@ -28,6 +28,8 @@ import { features, learnedPoints, type LearnerState } from './learner'
  */
 export type Fit = { score: number; base: number; reasons: string[] }
 
+/** True once the person has taken the 36-question quiz (skipping leaves certainty at 0). */
+export const quizTaken = (p: Pick<Person, 'certainty'>) => (p.certainty ?? 1) > 0
 export const jungOf = (p: Pick<Person, 'jung' | 'vector'>): Jung => p.jung ?? jungFromVector(p.vector)
 const jaccard = (a: string[] = [], b: string[] = []) => {
   if (!a.length || !b.length) return 0
