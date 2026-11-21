@@ -116,7 +116,8 @@ export default function Page() {
         'auth/network-request-failed': 'Network error — check your connection and retry.',
         'auth/domain': (e as { email?: string | null }).email ? `${(e as { email?: string | null }).email} is not a @${ALLOWED_DOMAIN} email` : 'Google did not share your email — try again',
       }
-      setError(msg[code] ?? `Sign-in failed${code ? ` (${code})` : ''}`)
+      const detail = e instanceof Error && e.message ? e.message : String(e)
+      setError(msg[code] ?? `Sign-in failed${code ? ` (${code})` : ''}: ${detail}`)
     }
   }
 
