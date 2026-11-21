@@ -1,9 +1,10 @@
 'use client'
 
 import { initializeApp, getApps, getApp } from 'firebase/app'
-import { browserLocalPersistence, getAdditionalUserInfo, getAuth, GoogleAuthProvider, setPersistence, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
+import { browserLocalPersistence, browserPopupRedirectResolver, getAdditionalUserInfo, getAuth, GoogleAuthProvider, initializeAuth, type Auth, setPersistence, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
 import { ALLOWED_DOMAIN, emailOf, isAllowedEmail } from './config'
-import { getFirestore, initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager, type Firestore } from 'firebase/firestore'
+import { getFirestore, initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager, persistentSingleTabManager, type Firestore } from 'firebase/firestore'
+import { Capacitor } from '@capacitor/core'
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDQQMTFQ8W0mj0jGdvdeVxIB8kgc419OaU',
@@ -17,13 +18,26 @@ const firebaseConfig = {
 
 export const firebaseConfigured = Object.values(firebaseConfig).every(Boolean)
 const app = firebaseConfigured ? (getApps().length ? getApp() : initializeApp(firebaseConfig)) : null
-export const auth = app ? getAuth(app) : null
+// Keep the login in localStorage, not IndexedDB. In the Android app, opening Chrome for Google
+// sign-in pauses the app and closes its IndexedDB ("Database is closing/hidden"); localStorage
+// stays available, so the sign-in can be saved when the app comes back.
+function makeAuth(): Auth | null {
+  if (!app) return null
+  if (typeof window === 'undefined') return getAuth(app)
+  try { return initializeAuth(app, { persistence: browserLocalPersistence, popupRedirectResolver: browserPopupRedirectResolver }) }
+  catch { return getAuth(app) } // already initialised (hot reload)
+}
+export const auth = makeAuth()
 // Offline cache: messages and swipes made without signal are queued and synced on reconnect,
 // and reopening the app shows chats instantly from the local cache.
 function makeDb(): Firestore | null {
   if (!app) return null
   try {
-    return initializeFirestore(app, { localCache: typeof window !== 'undefined' ? persistentLocalCache({ tabManager: persistentMultipleTabManager() }) : memoryLocalCache() })
+    if (typeof window === 'undefined') return initializeFirestore(app, { localCache: memoryLocalCache() })
+    // The Android app has a single "tab" that is paused in the background; the multi-tab manager's
+    // visibility-based leases don't suit it.
+    const tabManager = Capacitor.isNativePlatform() ? persistentSingleTabManager({ forceOwnership: true }) : persistentMultipleTabManager()
+    return initializeFirestore(app, { localCache: persistentLocalCache({ tabManager }) })
   } catch { return getFirestore(app) } // already initialised (hot reload)
 }
 export const db = makeDb()

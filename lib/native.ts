@@ -16,7 +16,7 @@ import { Browser } from '@capacitor/browser'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
 import { StatusBar, Style } from '@capacitor/status-bar'
 import { SplashScreen } from '@capacitor/splash-screen'
-import { GoogleAuthProvider, setPersistence, browserLocalPersistence, signInWithCredential, type Auth } from 'firebase/auth'
+import { GoogleAuthProvider, signInWithCredential, type Auth } from 'firebase/auth'
 
 export const SITE = 'https://thanmayroobanathans.github.io/V9'
 export const isNative = () => typeof window !== 'undefined' && Capacitor.isNativePlatform()
@@ -70,7 +70,13 @@ export async function nativeGoogleSignIn(auth: Auth) {
     const { idToken, accessToken } = await done
     Browser.close().catch(() => {})
     if (!idToken && !accessToken) throw fail('app/token', 'Google did not return a sign-in token')
-    await setPersistence(auth, browserLocalPersistence)
-    return await signInWithCredential(auth, GoogleAuthProvider.credential(idToken, accessToken))
+    const credential = GoogleAuthProvider.credential(idToken, accessToken)
+    // The WebView may still be waking up from the background; retry once if storage isn't ready.
+    try { return await signInWithCredential(auth, credential) }
+    catch (e) {
+      if (!/closing|hidden|indexeddb/i.test(String((e as Error)?.message))) throw e
+      await new Promise(r => setTimeout(r, 600))
+      return await signInWithCredential(auth, credential)
+    }
   } finally { (handle as PluginListenerHandle | null)?.remove() }
 }
