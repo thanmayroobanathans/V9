@@ -1,5 +1,8 @@
 name: Build Android APK
 
+# Builds the native VIT Pulse app (mobile/, React Native + Expo) and publishes the APK as a
+# GitHub release. Same package name and signing key as earlier builds, so it installs as an update.
+
 on:
   push:
     branches: [main]
@@ -15,36 +18,37 @@ concurrency:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
-      # The app bundles the site without the GitHub Pages /V9 base path.
-      - name: Build web app
-        run: pnpm exec next build
+      - name: Type check
+        run: npx tsc --noEmit -p .
 
-      - name: Copy web app into Android project
-        run: pnpm exec cap sync android
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --no-install
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 17
 
-      # Signing key: use the ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD secrets if set
-      # (permanent). Otherwise reuse a key kept in the Actions cache, creating one the first time.
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Signing key: ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD secrets if set (permanent),
+      # otherwise the key kept in the Actions cache (created on the first build).
       - name: Restore cached signing key
-        id: keycache
         uses: actions/cache@v4
         with:
           path: ~/vitpulse-key
@@ -69,9 +73,10 @@ jobs:
           echo "::add-mask::$(cat ~/vitpulse-key/password)"
 
       - name: Build APK
-        working-directory: android
+        working-directory: mobile/android
         run: |
-          chmod +x gradlew
+          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> gradle.properties
+          echo "reactNativeArchitectures=armeabi-v7a,arm64-v8a" >> gradle.properties
           ./gradlew --no-daemon assembleRelease
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/VIT-Pulse.apk"
 
@@ -83,8 +88,8 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v${{ github.run_number }}
-          name: VIT Pulse for Android (build ${{ github.run_number }})
+          tag_name: android-native-v${{ github.run_number }}
+          name: VIT Pulse for Android — native (build ${{ github.run_number }})
           body: |
             Download **VIT-Pulse.apk** below and open it on your Android phone to install.
             If Android asks, allow installing apps from your browser.

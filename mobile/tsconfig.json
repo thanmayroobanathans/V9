@@ -1,0 +1,33 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "firebase/*": [
+        "node_modules/firebase/*"
+      ],
+      "@react-native-async-storage/async-storage": [
+        "node_modules/@react-native-async-storage/async-storage"
+      ],
+      "expo-web-browser": [
+        "node_modules/expo-web-browser"
+      ],
+      "expo-crypto": [
+        "node_modules/expo-crypto"
+      ]
+    },
+    "moduleSuffixes": [
+      ".native",
+      ""
+    ]
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "../lib/*.native.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

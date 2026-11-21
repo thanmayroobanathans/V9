@@ -1,9 +1,10 @@
 import type { Smoothed } from './kalman'
+import { kv } from './kv'
 
 /**
  * Lifestyle signals ("nature") learned from movement.
  *
- * Kalman-smoothed positions are kept ONLY on this device (localStorage, last 14 days). From them
+ * Kalman-smoothed positions are kept ONLY on this device (local storage, last 14 days). From them
  * we compute a handful of behaviour features. Only those features — plus a ~1.2 km area code
  * used for "usually around the same part of campus" — are shared. No coordinates leave the phone.
  *
@@ -32,9 +33,9 @@ const dist = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) 
   return Math.hypot(dx, dy)
 }
 
-function load(): Sample[] { try { return JSON.parse(localStorage.getItem(KEY) || '[]') } catch { return [] } }
-function save(s: Sample[]) { try { localStorage.setItem(KEY, JSON.stringify(s)) } catch { /* storage full or blocked */ } }
-export function clearTrack() { try { localStorage.removeItem(KEY) } catch { /* ignore */ } }
+function load(): Sample[] { try { return JSON.parse(kv.get(KEY) || '[]') } catch { return [] } }
+function save(s: Sample[]) { kv.set(KEY, JSON.stringify(s)) }
+export function clearTrack() { kv.remove(KEY) }
 
 /** Adds a smoothed fix to the on-device track (throttled). Returns true when a sample was stored. */
 export function record(fix: Smoothed): boolean {
