@@ -23,6 +23,7 @@ import { Avatar, Chips, Ring } from '@/components/pulse/ui'
 import { FollowLists, Page as FullPage, ProfileScreen, ReportPage, Requests, Search, type FollowState } from '@/components/pulse/people'
 import { Legal } from '@/components/pulse/legal'
 import { emailOf, isAllowedEmail, ALLOWED_DOMAIN } from '@/lib/config'
+import { haptic, initNative, isNative, nativeGoogleSignIn, setBackHandler } from '@/lib/native'
 
 type Tab = 'swipe' | 'search' | 'matches' | 'profile'
 type Stage = 'gate' | 'loading' | 'build' | 'reveal' | 'app'
@@ -101,9 +102,11 @@ export default function Page() {
     })
   }, [])
 
+  useEffect(() => { initNative() }, [])
+
   async function login() {
     setError('')
-    try { await signInWithGoogle() } catch (e: unknown) {
+    try { if (isNative() && auth) await nativeGoogleSignIn(auth); else await signInWithGoogle() } catch (e: unknown) {
       if (auth?.currentUser) return
       const code = typeof e === 'object' && e && 'code' in e ? String((e as { code: string }).code) : ''
       const msg: Record<string, string> = {
@@ -241,8 +244,9 @@ export default function Page() {
   async function handleSwipe(p: Person, kind: Swipe) {
     if (!me) return
     learn(p, SIGNAL[kind])
+    haptic(kind === 'pass' ? 'light' : 'medium')
     setSwiped(s => new Set(s).add(p.uid))
-    try { const id = await swipe(me, p, kind); if (id) setCelebrate({ other: p, matchId: id }) }
+    try { const id = await swipe(me, p, kind); if (id) { setCelebrate({ other: p, matchId: id }); haptic('success') } }
     catch (e) { setError(`Not saved — ${e instanceof Error ? e.message : 'write failed'}`) }
   }
   const followStateOf = (uid: string): FollowState => { const f = outgoing.find(x => x.toUid === uid); return !f ? 'none' : f.status === 'accepted' ? 'following' : 'requested' }
@@ -262,6 +266,7 @@ export default function Page() {
   }
 
   // ---------- render ----------
+  if (stage !== 'app') setBackHandler(null)
   if (stage === 'gate') return (
     <main className="gate">
       <div className="gate-inner page-in">
@@ -359,6 +364,17 @@ export default function Page() {
       : <><Requests incoming={incoming} onAccept={accept} onDecline={f => removeFollower(me.uid, f.fromUid).catch(() => {})} /><Inbox me={me} matches={allMatches} people={byUid} lastRead={lastRead} onOpen={openChat} /></>
     return <ProfileScreen me={me} person={me} counts={{ followers, following: followingN }} onEdit={() => setEditing('profile')} onQuiz={() => setEditing('quiz')} onSettings={() => push({ kind: 'settings' })} onLists={t => push({ kind: 'lists', tab: t })} />
   })()
+
+  // Android back button: close the innermost thing that's open, else go to Swipe, else leave the app.
+  setBackHandler(() => {
+    if (celebrate) { setCelebrate(null); return true }
+    if (legal) { setLegal(null); return true }
+    if (editing) { setEditing(null); return true }
+    if (stack.length) { pop(); return true }
+    if (chatId) { setChatId(null); return true }
+    if (tab !== 'swipe') { go('swipe'); return true }
+    return false
+  })
 
   const fullscreen = !!editing || !!top || (tab === 'matches' && !!active)
   return (

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">VIT Pulse</string>
+    <string name="title_activity_main">VIT Pulse</string>
+    <string name="package_name">com.vitpulse.app</string>
+    <string name="custom_url_scheme">com.vitpulse.app</string>
+</resources>

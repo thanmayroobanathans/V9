@@ -10,6 +10,7 @@ import { compressImage } from '@/lib/image'
 import { typeInfo } from '@/lib/jung'
 import { jungOf, quizTaken } from '@/lib/match'
 import { Avatar } from './ui'
+import { haptic } from '@/lib/native'
 
 export type FollowState = 'none' | 'requested' | 'following'
 
@@ -102,7 +103,7 @@ function PostView({ post, owner, me, editable, onBack }: { post: Post; owner: Pe
     setInfo({ count: info.count + (on ? 1 : -1), liked: on })
     try { await setLike(post.uid, post.id, me, on) } catch { setInfo(prev) }
   }
-  const dbl = () => { setBurst(b => b + 1); set(true) }
+  const dbl = () => { setBurst(b => b + 1); haptic('light'); set(true) }
   return (
     <Page title="Post" onBack={onBack}>
       <div className="post-head"><Avatar name={owner.name} photoURL={owner.photoURL} hue={owner.hue} size={32} /><b>{owner.username}</b></div>

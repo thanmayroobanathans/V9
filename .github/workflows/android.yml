@@ -1,0 +1,92 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The app bundles the site without the GitHub Pages /V9 base path.
+      - name: Build web app
+        run: pnpm exec next build
+
+      - name: Copy web app into Android project
+        run: pnpm exec cap sync android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Signing key: use the ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD secrets if set
+      # (permanent). Otherwise reuse a key kept in the Actions cache, creating one the first time.
+      - name: Restore cached signing key
+        id: keycache
+        uses: actions/cache@v4
+        with:
+          path: ~/vitpulse-key
+          key: vitpulse-signing-key-v1
+
+      - name: Prepare signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          mkdir -p ~/vitpulse-key
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > ~/vitpulse-key/release.jks
+            echo "$KEYSTORE_PW" > ~/vitpulse-key/password
+          elif [ ! -f ~/vitpulse-key/release.jks ]; then
+            openssl rand -hex 16 > ~/vitpulse-key/password
+            keytool -genkeypair -v -keystore ~/vitpulse-key/release.jks -alias vitpulse -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$(cat ~/vitpulse-key/password)" -keypass "$(cat ~/vitpulse-key/password)" -dname "CN=VIT Pulse, O=VIT Pulse, C=IN"
+          fi
+          echo "KEYSTORE_PATH=$HOME/vitpulse-key/release.jks" >> "$GITHUB_ENV"
+          echo "KEYSTORE_PASSWORD=$(cat ~/vitpulse-key/password)" >> "$GITHUB_ENV"
+          echo "::add-mask::$(cat ~/vitpulse-key/password)"
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/VIT-Pulse.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VIT-Pulse-apk
+          path: VIT-Pulse.apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-v${{ github.run_number }}
+          name: VIT Pulse for Android (build ${{ github.run_number }})
+          body: |
+            Download **VIT-Pulse.apk** below and open it on your Android phone to install.
+            If Android asks, allow installing apps from your browser.
+          files: VIT-Pulse.apk
+          make_latest: true
