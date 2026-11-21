@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { FlatList, Text, TextInput, View } from 'react-native'
+import { FlatList, TextInput, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useApp } from '../store'
-import { Avatar, Button, Header, Row, T } from '../components/ui'
+import { Avatar, Button, Header, Row, T, Text } from '../components/ui'
 import { C } from '../theme'
 import type { Stack } from '../nav'
-import { searchPeople, type Person } from '../../../lib/social'
+import { searchPeople, workLine, type Person } from '../../../lib/social'
 import { fit } from '../../../lib/match'
 
 export function SearchScreen() {
@@ -28,7 +28,7 @@ export function SearchScreen() {
     .map(({ p, f }) => {
       const common = p.interests.filter(i => me.interests.includes(i))
       const same = p.program && p.program.toLowerCase() === me.program.toLowerCase()
-      return { p, reason: same && p.year === me.year ? `Also ${p.program} · ${p.year}` : common.length >= 2 ? `${common.length} shared interests` : common.length === 1 ? `Also into ${common[0]}` : same ? `Also ${p.program}` : `${f.score}% match` }
+      return { p, reason: same && p.year && p.year === me.year ? `Also ${workLine(p)}` : common.length >= 2 ? `${common.length} shared interests` : common.length === 1 ? `Also into ${common[0]}` : same ? `Also ${p.program}` : `${f.score}% match` }
     }), [app.people, app.outgoing, me, app.taste]) // eslint-disable-line react-hooks/exhaustive-deps
   const searching = q.trim().length >= 2
   return (
@@ -40,9 +40,10 @@ export function SearchScreen() {
         {!!q && <Ionicons name="close-circle" size={18} color={C.muted} onPress={() => setQ('')} />}
       </View>
       <FlatList
-        data={searching ? res.map(p => ({ p, reason: `${p.name} · ${p.program}` })) : suggestions}
+        data={searching ? res.map(p => ({ p, reason: [p.name, p.program].filter(Boolean).join(' · ') })) : suggestions}
         keyExtractor={x => x.p.uid}
         keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 110 }}
         ListHeaderComponent={!searching ? <Text style={[T.b, { fontSize: 15, marginHorizontal: 16, marginTop: 16, marginBottom: 4 }]}>Suggested for you</Text> : null}
         ListEmptyComponent={<Text style={[T.muted, { textAlign: 'center', marginTop: 24 }]}>{searching ? 'No accounts found' : 'No suggestions yet — more students are joining every day.'}</Text>}
         renderItem={({ item: { p, reason } }) => {

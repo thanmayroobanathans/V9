@@ -1,24 +1,24 @@
 {
   "expo": {
-    "name": "VIT Pulse",
+    "name": "Pulse",
     "slug": "vit-pulse",
     "version": "10.0.0",
     "scheme": "vitpulse",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#000000",
+    "backgroundColor": "#0A0A0F",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#0A0A0F"
     },
     "android": {
       "package": "com.vitpulse.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#D62976"
+        "backgroundColor": "#FF2D6F"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
@@ -36,7 +36,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "VIT Pulse uses your location to learn your daily rhythm for better matches. It is never shown to anyone."
+          "locationWhenInUsePermission": "Pulse uses your location to learn your daily rhythm for better matches. It is never shown to anyone."
         }
       ],
       [
@@ -53,7 +53,7 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 220,
           "resizeMode": "contain",
-          "backgroundColor": "#000000"
+          "backgroundColor": "#0A0A0F"
         }
       ],
       [

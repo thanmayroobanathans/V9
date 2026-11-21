@@ -13,7 +13,7 @@ import { areaCode, clearTrack, computeNature, natureTags, record } from '@/lib/n
 import { saveProfile, saveResult } from '@/lib/firestore'
 import { SIGNAL, features, newLearner, pack, unpack, update, type LearnerState } from '@/lib/learner'
 import {
-  loadMySwipes, loadPerson, loadTaste, saveTaste, acceptFollow, cancelFollow, claimUsername, deleteAccount, normaliseUsername, removeFollower, requestFollow, watchFollows, type Follow, savePerson, sendMessage, swipe, unmatch, updateSignals,
+  loadMySwipes, loadPerson, workLine, loadTaste, saveTaste, acceptFollow, cancelFollow, claimUsername, deleteAccount, normaliseUsername, removeFollower, requestFollow, watchFollows, type Follow, savePerson, sendMessage, swipe, unmatch, updateSignals,
   watchMatches, watchMessages, watchPeople, type Match, type Message, type Person, type Swipe,
 } from '@/lib/social'
 import { ProfileBuilder, QuizIntro, TraitDetails, TypeCard, type Draft } from '@/components/pulse/onboarding'
@@ -22,7 +22,7 @@ import { ChatView, Inbox, MatchModal, isUnread, matchStarters, otherOf } from '@
 import { Avatar, Chips, Ring } from '@/components/pulse/ui'
 import { FollowLists, Page as FullPage, ProfileScreen, ReportPage, Requests, Search, type FollowState } from '@/components/pulse/people'
 import { Legal } from '@/components/pulse/legal'
-import { emailOf, isAllowedEmail, ALLOWED_DOMAIN } from '@/lib/config'
+import { emailOf, isAllowedEmail } from '@/lib/config'
 import { haptic, initNative, isNative, nativeGoogleSignIn, setBackHandler } from '@/lib/native'
 
 type Tab = 'swipe' | 'search' | 'matches' | 'profile'
@@ -95,7 +95,7 @@ export default function Page() {
     return onAuthStateChanged(auth, async u => {
       setUser(u)
       if (!u) { setStage('gate'); setMe(null); return }
-      if (!isAllowedEmail(emailOf(u))) { const em = emailOf(u); await signOut(); setError(em ? `${em} is not a @${ALLOWED_DOMAIN} email` : 'Google did not share your email — try again'); return }
+      if (!isAllowedEmail(emailOf(u))) { const em = emailOf(u); await signOut(); setError(em ? `Could not sign in with ${em}` : 'Google did not share your email — try again'); return }
       setStage('loading')
       try { const p = await loadPerson(u.uid); if (isReady(p)) { setMe(p); setStage('app') } else { setPartial(p); setStage('build') } }
       catch (e) { setError(e instanceof Error ? e.message : 'Could not load your profile'); setStage('build') }
@@ -114,7 +114,7 @@ export default function Page() {
         'auth/popup-closed-by-user': 'Sign-in cancelled.', 'auth/cancelled-popup-request': 'Sign-in cancelled.',
         'auth/unauthorized-domain': `This domain isn't authorised — add ${window.location.hostname} in Firebase → Authentication → Settings.`,
         'auth/network-request-failed': 'Network error — check your connection and retry.',
-        'auth/domain': (e as { email?: string | null }).email ? `${(e as { email?: string | null }).email} is not a @${ALLOWED_DOMAIN} email` : 'Google did not share your email — try again',
+        'auth/domain': 'Google did not share your email — try again',
       }
       const detail = e instanceof Error && e.message ? e.message : String(e)
       setError(msg[code] ?? `Sign-in failed${code ? ` (${code})` : ''}: ${detail}`)
@@ -146,7 +146,7 @@ export default function Page() {
 
   // ---------- profile ----------
   const blankDraft = useMemo<Draft>(() => ({
-    uid: user?.uid ?? '', username: normaliseUsername((user?.email ?? '').split('@')[0]).replace(/^[._]+/, ''), name: user?.displayName?.split(' ')[0] ?? '', age: 0, intent: 'open', program: '', year: '2nd year', bio: '', status: '',
+    uid: user?.uid ?? '', username: normaliseUsername((user?.email ?? '').split('@')[0]).replace(/^[._]+/, ''), name: user?.displayName?.split(' ')[0] ?? '', age: 0, intent: 'open', program: '', year: '', bio: '', status: '',
     interests: [], openTo: [], prompts: [], photoURL: user?.photoURL ?? null, hue: 210, nature: null, area: null, activeAt: 0, visible: true,
     ...(partial ? Object.fromEntries(Object.entries(partial).filter(([k, v]) => v !== undefined && v !== null && v !== '' && !['loc', 'locAt', 'placeId'].includes(k))) : {}),
   } as Draft), [user, partial])
@@ -223,7 +223,7 @@ export default function Page() {
   // Mark the open thread as read whenever it changes.
   useEffect(() => { if (active) setLastRead(r => ({ ...r, [active.id]: Math.max(Date.now(), active.lastAt) })) }, [active?.id, active?.lastAt]) // eslint-disable-line react-hooks/exhaustive-deps
   const unreadCount = me ? allMatches.filter(m => m.status === 'open' && (isUnread(m, me.uid, lastRead) || !m.lastMessage)).length : 0
-  useEffect(() => { document.title = unreadCount ? `(${unreadCount}) VIT Pulse` : 'VIT Pulse' }, [unreadCount])
+  useEffect(() => { document.title = unreadCount ? `(${unreadCount}) Pulse` : 'Pulse' }, [unreadCount])
 
   useEffect(() => { setMsgCount(PAGE) }, [chatId])
   useEffect(() => {
@@ -271,18 +271,17 @@ export default function Page() {
   if (stage === 'gate') return (
     <main className="gate">
       <div className="gate-inner page-in">
-        <div className="logo big">VIT Pulse</div>
-        <p className="muted center">Meet VIT students who fit you.</p>
+        <div className="logo big">Pulse</div>
+        <p className="muted center">Meet people who actually fit you.</p>
         <button className="primary-button wide" disabled={!agreed} onClick={login}>Continue with Google</button>
-        <label className="agree"><input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} /><span>I&apos;m 18+, a VIT student, and agree to the <button type="button" className="link-button inline" onClick={() => setLegal('terms')}>Terms</button> and <button type="button" className="link-button inline" onClick={() => setLegal('privacy')}>Privacy Policy</button>.</span></label>
+        <label className="agree"><input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} /><span>I&apos;m 18+ and agree to the <button type="button" className="link-button inline" onClick={() => setLegal('terms')}>Terms</button> and <button type="button" className="link-button inline" onClick={() => setLegal('privacy')}>Privacy Policy</button>.</span></label>
         {!firebaseConfigured && <p className="config-note">Firebase configuration required.</p>}
         {error && <p className="error center">{error}</p>}
-        <p className="gate-foot">Use your @{ALLOWED_DOMAIN} account</p>
       </div>
       {legal && <Legal initial={legal} onClose={() => setLegal(null)} />}
     </main>
   )
-  if (stage === 'loading') return <main className="gate"><div className="logo big pulse">VIT Pulse</div></main>
+  if (stage === 'loading') return <main className="gate"><div className="logo big pulse">Pulse</div></main>
   if (stage === 'build') return <main className="solo">{error && <p className="error banner" onClick={() => setError('')}>{error}</p>}<ProfileBuilder initial={blankDraft} mode="onboard" locationOn={geo === 'on' || geo === 'asking'} requestLocation={() => setWantLocation(true)} onDone={finishBuild} saving={saving} /></main>
   if (stage === 'reveal' && me) return (
     <main className="solo"><section className="builder page-in reveal">
@@ -345,7 +344,7 @@ export default function Page() {
         .slice(0, 25)
         .map(({ p, f }) => {
           const common = p.interests.filter(i => me.interests.includes(i))
-          const reason = p.program && p.program.toLowerCase() === me.program.toLowerCase() && p.year === me.year ? `Also ${p.program} · ${p.year}`
+          const reason = p.program && p.program.toLowerCase() === me.program.toLowerCase() && p.year && p.year === me.year ? `Also ${workLine(p)}`
             : common.length >= 2 ? `${common.length} shared interests`
             : common.length === 1 ? `Also into ${common[0]}`
             : p.program && p.program.toLowerCase() === me.program.toLowerCase() ? `Also ${p.program}`
@@ -380,7 +379,7 @@ export default function Page() {
   const fullscreen = !!editing || !!top || (tab === 'matches' && !!active)
   return (
     <div className={`app-shell ig${chatId ? ' in-chat' : ''}`}>
-      {!fullscreen && <header className="ig-bar">{tab === 'profile' ? <b className="ig-user">{me.username}</b> : <span className="logo">VIT Pulse</span>}{tab === 'swipe' && <span className="muted small">{candidates.length ? '' : ''}</span>}</header>}
+      {!fullscreen && <header className="ig-bar">{tab === 'profile' ? <b className="ig-user">{me.username}</b> : <span className="logo">Pulse</span>}{tab === 'swipe' && <span className="muted small">{candidates.length ? '' : ''}</span>}</header>}
       <main className="ig-main">
         {error && <p className="error banner" onClick={() => setError('')} title="Dismiss">{error}</p>}
         {screen}

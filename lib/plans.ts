@@ -10,7 +10,7 @@ import { fit } from './match'
 import type { LearnerState } from './learner'
 
 /**
- * Plans — short-lived things to do together on campus ("Badminton at 7, need 2 more").
+ * Plans — short-lived things to do together nearby ("Badminton at 7, need 2 more").
  * Swipe right to join; everyone who joins shares a group chat. Plans expire a couple of hours
  * after their start time, so the deck always shows what's happening now.
  */

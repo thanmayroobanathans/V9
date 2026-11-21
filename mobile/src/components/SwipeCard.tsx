@@ -3,7 +3,7 @@
  * the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
  *
  * Adapted from Alovoa (alovoa-expo, components/SwipeCard.tsx and CardStack.tsx) — changes for
- * VIT Pulse: super-like on swipe up, imperative swipe() for the buttons, tap handling, haptics,
+ * Pulse: super-like on swipe up, imperative swipe() for the buttons, tap handling, haptics,
  * a second card peeking underneath, and a LIKE / NOPE / SUPER stamp.
  */
 import React, { forwardRef, useImperativeHandle } from 'react'

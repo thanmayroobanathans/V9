@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useApp } from '../store'
-import { Avatar, Button, Empty, Header, Row, T } from '../components/ui'
-import { C } from '../theme'
+import { Avatar, Button, Empty, Header, Row, T, Text } from '../components/ui'
+import { C, GRAD } from '../theme'
+import { LinearGradient } from 'expo-linear-gradient'
 import type { Props, Stack } from '../nav'
 import { watchMessages, type Match, type Message } from '../../../lib/social'
 import { icebreakers } from '../../../lib/pulse-model'
@@ -27,6 +28,7 @@ export function ChatsScreen() {
       <FlatList
         data={convos}
         keyExtractor={m => m.id}
+        contentContainerStyle={{ paddingBottom: 110 }}
         ListHeaderComponent={<>
           {pending.length > 0 && <>
             <Text style={[T.b, { fontSize: 15, margin: 16, marginBottom: 4 }]}>Follow requests</Text>
@@ -110,14 +112,16 @@ export function ChatScreen({ route, navigation }: Props<'Chat'>) {
               <Text style={[T.b, { fontSize: 17 }]}>{o?.name}</Text>
               <Text style={T.muted}>Say hi 👋</Text>
               {person && icebreakers(me.vector, person.vector).map(q => (
-                <Pressable key={q} onPress={() => send(q)} style={{ backgroundColor: C.panel, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: C.line }}><Text style={{ color: C.ink }}>{q}</Text></Pressable>
+                <Pressable key={q} onPress={() => send(q)} style={{ backgroundColor: C.glass, borderRadius: 20, paddingHorizontal: 15, paddingVertical: 11, borderWidth: 1, borderColor: C.glassBorder }}><Text style={{ color: C.ink }}>{q}</Text></Pressable>
               ))}
             </View>}
           renderItem={({ item: x }) => {
             const mine = x.senderUid === me.uid
             return (
-              <Animated.View entering={FadeInDown.duration(180)} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '78%', backgroundColor: mine ? '#3797f0' : C.panel2, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 9, opacity: x.pending ? 0.6 : 1 }}>
-                <Text style={{ color: '#fff', fontSize: 15 }}>{x.text}</Text>
+              <Animated.View entering={FadeInDown.duration(180)} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '78%', opacity: x.pending ? 0.6 : 1 }}>
+                {mine
+                  ? <LinearGradient colors={GRAD} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 22, borderBottomRightRadius: 6, paddingHorizontal: 15, paddingVertical: 10 }}><Text style={{ color: '#fff', fontSize: 15, fontWeight: '500' }}>{x.text}</Text></LinearGradient>
+                  : <View style={{ backgroundColor: C.glass, borderWidth: 1, borderColor: C.glassBorder, borderRadius: 22, borderBottomLeftRadius: 6, paddingHorizontal: 15, paddingVertical: 10 }}><Text style={{ fontSize: 15 }}>{x.text}</Text></View>}
               </Animated.View>
             )
           }}
@@ -125,8 +129,8 @@ export function ChatScreen({ route, navigation }: Props<'Chat'>) {
         {m.status === 'closed'
           ? <Text style={[T.muted, { textAlign: 'center', padding: 16 }]}>Chat closed</Text>
           : <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10 }}>
-            <TextInput value={text} onChangeText={setText} placeholder="Message…" placeholderTextColor={C.muted} multiline maxLength={1000} style={{ flex: 1, color: C.ink, borderWidth: 1, borderColor: C.line, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, maxHeight: 120 }} />
-            <Pressable disabled={!text.trim()} onPress={() => send(text)} style={{ opacity: text.trim() ? 1 : 0.4, padding: 6 }}><Text style={{ color: C.accent, fontWeight: '700', fontSize: 15 }}>Send</Text></Pressable>
+            <TextInput value={text} onChangeText={setText} placeholder="Message…" placeholderTextColor={C.muted} multiline maxLength={1000} style={{ flex: 1, color: C.ink, fontFamily: 'PlusJakartaSans_500Medium', backgroundColor: C.glass, borderWidth: 1, borderColor: C.glassBorder, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, maxHeight: 120 }} />
+            <Pressable disabled={!text.trim()} onPress={() => send(text)} style={{ opacity: text.trim() ? 1 : 0.4 }}><LinearGradient colors={GRAD} style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="arrow-up" size={22} color="#fff" /></LinearGradient></Pressable>
           </View>}
       </KeyboardAvoidingView>
     </SafeAreaView>

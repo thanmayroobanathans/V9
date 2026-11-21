@@ -5,9 +5,9 @@ import './globals.css'
 const base = process.env.NEXT_PUBLIC_BASE_PATH || ''
 
 export const metadata: Metadata = {
-  title: 'VIT Pulse',
-  description: 'See who is around on campus, find hangout spots, and chat.',
-  generator: 'VIT PULSE',
+  title: 'Pulse',
+  description: 'Meet people who actually fit you. Swipe, match and chat.',
+  generator: 'Pulse',
   icons: {
     icon: [
       {
@@ -48,7 +48,7 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Grand+Hotel&display=swap" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
       </head>
       <body className="antialiased">
         {children}

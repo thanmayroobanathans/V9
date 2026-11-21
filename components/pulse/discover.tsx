@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { Compass, Heart, Info, RefreshCw, SlidersHorizontal, Star, X } from 'lucide-react'
-import { INTENT_LABEL, isActive, type Intent, type Person, type Swipe } from '@/lib/social'
+import { INTENT_LABEL, isActive, workLine, type Intent, type Person, type Swipe } from '@/lib/social'
 import { fit, fitLabel, jungOf, quizTaken, type Fit } from '@/lib/match'
 import { natureTags } from '@/lib/nature'
 import type { LearnerState } from '@/lib/learner'
@@ -85,7 +85,7 @@ function SwipeCard({ me, p, f, depth, onSwipe }: { me: Person; p: Person; f: Fit
           {isActive(p) && <span className="live-tag">● Active now</span>}
           <div className="card-overlay">
             <div className="card-title">
-              <div><h3>{p.name}, {p.age}</h3><span>{p.program} · {p.year}</span></div>
+              <div><h3>{p.name}, {p.age}</h3><span>{workLine(p)}</span></div>
               <Ring value={f.score} />
             </div>
             <div className="card-meta"><b>{fitLabel(f.score)}</b>{quizTaken(p) ? ` · ${t.emoji} ${t.name}` : ''}{tags.length ? ` · ${tags[0]}` : ''}</div>

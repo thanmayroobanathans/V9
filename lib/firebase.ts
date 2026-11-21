@@ -2,7 +2,7 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app'
 import { browserLocalPersistence, browserPopupRedirectResolver, getAdditionalUserInfo, getAuth, GoogleAuthProvider, initializeAuth, type Auth, setPersistence, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
-import { ALLOWED_DOMAIN, emailOf, isAllowedEmail } from './config'
+import { emailOf, isAllowedEmail } from './config'
 import { getFirestore, initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager, persistentSingleTabManager, type Firestore } from 'firebase/firestore'
 import { Capacitor } from '@capacitor/core'
 
@@ -42,9 +42,7 @@ function makeDb(): Firestore | null {
 }
 export const db = makeDb()
 export const googleProvider = new GoogleAuthProvider()
-// `hd` asks Google to show only VIT student accounts; the email is checked again after sign-in
-// and enforced server-side in firestore.rules.
-googleProvider.setCustomParameters({ prompt: 'select_account', hd: ALLOWED_DOMAIN })
+googleProvider.setCustomParameters({ prompt: 'select_account' })
 
 export async function signInWithGoogle() {
   if (!auth) throw new Error('Firebase Authentication is unavailable. Check the Firebase project configuration.')
@@ -55,7 +53,7 @@ export async function signInWithGoogle() {
   const email = emailOf(cred.user) || profileEmail
   if (!isAllowedEmail(email)) {
     await firebaseSignOut(auth)
-    throw Object.assign(new Error(`Use your @${ALLOWED_DOMAIN} account`), { code: 'auth/domain', email })
+    throw Object.assign(new Error('Google did not share your email — try again'), { code: 'auth/domain', email })
   }
   return cred
 }

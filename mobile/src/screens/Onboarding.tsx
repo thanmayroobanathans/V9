@@ -1,17 +1,16 @@
 import React, { useEffect, useState } from 'react'
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native'
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Animated, { FadeInRight, FadeInUp } from 'react-native-reanimated'
 import { Ionicons } from '@expo/vector-icons'
 import { useApp, type Draft } from '../store'
-import { Avatar, Button, Chip, Chips, Field, Input, Segmented, T } from '../components/ui'
+import { Avatar, Button, Chip, Chips, Field, Input, Segmented, T, Text } from '../components/ui'
 import { TypeCard } from '../components/profile'
 import { pickImage } from '../image'
 import { C } from '../theme'
 import { INTENT_LABEL, INTERESTS, USERNAME_RE, normaliseUsername, usernameOwner, type Intent } from '../../../lib/social'
 import { QUESTIONS } from '../../../lib/pulse-model'
 
-const YEARS = ['1st year', '2nd year', '3rd year', '4th year', '5th year', 'Masters', 'PhD']
 
 /** Profile builder. onboard: 3 steps then optional quiz. edit: same steps, saves on Done. */
 export function ProfileBuilder({ initial, mode, onDone, onCancel }: { initial: Draft; mode: 'onboard' | 'edit'; onDone: (d: Draft, answers?: number[]) => Promise<boolean | void>; onCancel?: () => void }) {
@@ -23,7 +22,7 @@ export function ProfileBuilder({ initial, mode, onDone, onCancel }: { initial: D
   const [photoErr, setPhotoErr] = useState('')
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD(x => ({ ...x, [k]: v }))
   const steps = 3
-  const valid = [nameOk && d.name.trim().length > 0 && d.age >= 18 && d.age <= 40 && d.program.trim().length > 0, d.interests.length >= 3, true]
+  const valid = [nameOk && d.name.trim().length > 0 && d.age >= 18 && d.age <= 99, d.interests.length >= 3, true]
   const last = step === steps - 1
 
   if (quiz) return <Quiz onBack={() => setQuiz(false)} onDone={a => onDone(d, a)} />
@@ -51,10 +50,9 @@ export function ProfileBuilder({ initial, mode, onDone, onCancel }: { initial: D
               <Field label="Name"><Input value={d.name} maxLength={24} placeholder="First name" onChangeText={t => set('name', t)} /></Field>
               <View style={{ flexDirection: 'row', gap: 12 }}>
                 <View style={{ width: 96 }}><Field label="Age"><Input value={d.age ? String(d.age) : ''} keyboardType="number-pad" maxLength={2} onChangeText={t => set('age', Number(t.replace(/\D/g, '')))} /></Field></View>
-                <View style={{ flex: 1 }}><Field label="Program"><Input value={d.program} maxLength={32} placeholder="CSE, ECE, BBA…" onChangeText={t => set('program', t)} /></Field></View>
+                <View style={{ flex: 1 }}><Field label="Work or study" hint="optional"><Input value={d.program} maxLength={40} placeholder="Designer, Student at…" onChangeText={t => set('program', t)} /></Field></View>
               </View>
               {d.age > 0 && d.age < 18 && <Text style={T.error}>18+ only</Text>}
-              <Field label="Year"><Segmented value={d.year} onChange={v => set('year', v)} options={YEARS.map(y => ({ v: y, label: y.replace(' year', '') }))} /></Field>
             </>}
 
             {step === 1 && <>

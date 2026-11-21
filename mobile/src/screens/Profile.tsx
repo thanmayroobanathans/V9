@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { Pressable, ScrollView, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
@@ -9,7 +9,7 @@ import * as Haptics from 'expo-haptics'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useApp } from '../store'
-import { Avatar, Button, Header, T } from '../components/ui'
+import { Avatar, Button, Header, T, Text } from '../components/ui'
 import { ActionButton, ProfileView, TypeCard } from '../components/profile'
 import { ProfileBuilder, Quiz } from './Onboarding'
 import { pickImage } from '../image'
@@ -25,7 +25,7 @@ export function MyProfileScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <Header title={me.username} right={<Pressable hitSlop={10} onPress={() => nav.navigate('Settings')}><Ionicons name="menu" size={26} color={C.ink} /></Pressable>} />
-      <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
         <ProfileView me={me} person={me} canSee counts={{ followers, following }}
           onOpenPost={post => nav.navigate('Post', { owner: me, post })} onNewPost={() => nav.navigate('NewPost')} onQuiz={() => nav.navigate('Quiz')} onLists={tab => nav.navigate('Lists', { tab })}
           actions={<><ActionButton kind="secondary" title="Edit profile" onPress={() => nav.navigate('EditProfile')} /><ActionButton kind="secondary" title="Settings" onPress={() => nav.navigate('Settings')} /></>} />

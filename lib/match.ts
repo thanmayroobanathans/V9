@@ -16,7 +16,7 @@ import { features, learnedPoints, type LearnerState } from './learner'
  *     learned on-device from Kalman-smoothed location (see nature.ts), weighted by confidence.
  *  2. A bounded context adjustment (never more than ±12 points), from:
  *       lifestyle sync   similar daily rhythm (night owl / early bird) and exploring style
- *       area             usually around the same part of campus
+ *       area             usually around the same area
  *       common ground    shared interests and activities
  *       intent           looking for the same kind of connection
  *       Jung fit         background personality-type fit
@@ -61,9 +61,9 @@ export function fit(me: Person, other: Person, taste?: LearnerState | null): Fit
       else if (rhythm > 0.85 && conf > 0.2) reasons.push('Similar daily rhythm')
     }
   }
-  // 2. Same part of campus.
+  // 2. Same area.
   const area = areaAffinity(me.area, other.area)
-  if (area !== null) { adj += area * 4; if (area === 1) reasons.push('Usually around the same part of campus') }
+  if (area !== null) { adj += area * 4; if (area === 1) reasons.push('Usually around the same area') }
   // 3. Common ground.
   const common = other.interests.filter(i => me.interests.includes(i))
   adj += jaccard(me.interests, other.interests) * 8 + jaccard(me.openTo, other.openTo) * 3 - 1.5

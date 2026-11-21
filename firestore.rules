@@ -8,11 +8,10 @@ service cloud.firestore {
     // HELPERS
     // =====================================================
 
-    // Only verified @vitstudent.ac.in Google accounts can use the app.
+    // Anyone with a verified Google account can use the app.
     function signedIn() {
       return request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.token.email.lower().matches('.*@vitstudent[.]ac[.]in$');
+        && request.auth.token.email_verified == true;
     }
 
     function self(uid) {

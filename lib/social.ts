@@ -54,10 +54,13 @@ export type Person = {
 export type Match = { id: string; via?: 'swipe' | 'follow'; memberUids: string[]; members: Record<string, { name: string; photoURL: string | null; hue: number }>; lastMessage: string; lastSender: string; lastAt: number; status: 'open' | 'closed' }
 export type Message = { id: string; senderUid: string; senderName?: string; text: string; at: number; pending?: boolean }
 
-export const INTERESTS = ['Coding', 'Hackathons', 'Music', 'Gym', 'Badminton', 'Cricket', 'Football', 'Photography', 'Anime', 'Movies', 'Gaming', 'Reading', 'Startups', 'Dance', 'Travel', 'Cooking', 'Chai', 'Coffee', 'Art', 'Poetry', 'Debate', 'Robotics', 'Fashion', 'Night walks', 'K-drama', 'Podcasts', 'Volunteering', 'Riviera']
-export const OPEN_TO = ['Study buddy', 'Food runs', 'Sports', 'Project team', 'Exploring campus', 'Just chatting', 'Jam session', 'Gaming']
-export const PROMPTS = ['A perfect Sunday on campus looks like…', 'My most irrational fear is…', 'The way to win me over is…', 'I geek out on…', 'Green flags I look for…', 'We will get along if…', 'My go-to Foodys order is…', 'Two truths and a lie…']
+export const INTERESTS = ['Coding', 'Hackathons', 'Music', 'Gym', 'Badminton', 'Cricket', 'Football', 'Photography', 'Anime', 'Movies', 'Gaming', 'Reading', 'Startups', 'Dance', 'Travel', 'Cooking', 'Chai', 'Coffee', 'Art', 'Poetry', 'Debate', 'Robotics', 'Fashion', 'Night walks', 'K-drama', 'Podcasts', 'Volunteering', 'Hiking']
+export const OPEN_TO = ['Study buddy', 'Food runs', 'Sports', 'Project team', 'Exploring the city', 'Just chatting', 'Jam session', 'Gaming']
+export const PROMPTS = ['A perfect Sunday looks like…', 'My most irrational fear is…', 'The way to win me over is…', 'I geek out on…', 'Green flags I look for…', 'We will get along if…', 'My go-to Foodys order is…', 'Two truths and a lie…']
 export const INTENT_LABEL: Record<Intent, string> = { friends: 'New friends', casual: 'Hang out', 'long-term': 'Something more', open: 'Open to anything' }
+
+/** "Work or study" line for cards (older profiles also have a separate year). */
+export const workLine = (p: Pick<Person, 'program' | 'year'>) => [p.program, p.year].filter(Boolean).join(' · ')
 
 export const ACTIVE_MS = 30 * 60 * 1000
 export const isActive = (p: Pick<Person, 'activeAt'>) => !!p.activeAt && Date.now() - p.activeAt < ACTIVE_MS

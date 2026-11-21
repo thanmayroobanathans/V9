@@ -7,7 +7,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth'
 import * as Location from 'expo-location'
 import * as Haptics from 'expo-haptics'
 import { auth, signInWithGoogle, signOut } from '../../lib/firebase'
-import { emailOf, isAllowedEmail, ALLOWED_DOMAIN } from '../../lib/config'
+import { emailOf, isAllowedEmail } from '../../lib/config'
 import { kv, hydrateKv } from '../../lib/kv'
 import { classify } from '../../lib/pulse-model'
 import { estimateTraits } from '../../lib/trait-kalman'
@@ -73,7 +73,7 @@ function useAppState() {
     return onAuthStateChanged(auth, async u => {
       setUser(u)
       if (!u) { setStage('gate'); setMe(null); return }
-      if (!isAllowedEmail(emailOf(u))) { const em = emailOf(u); await signOut(); setError(em ? `${em} is not a @${ALLOWED_DOMAIN} email` : 'Google did not share your email — try again'); return }
+      if (!isAllowedEmail(emailOf(u))) { const em = emailOf(u); await signOut(); setError(em ? `Could not sign in with ${em}` : 'Google did not share your email — try again'); return }
       setLastReadState(getJSON(`read.${u.uid}`, {}))
       setWantLocationState(getJSON(`loc.${u.uid}`, false))
       setStage('loading')
@@ -87,7 +87,7 @@ function useAppState() {
     try { await signInWithGoogle() } catch (e) {
       const code = typeof e === 'object' && e && 'code' in e ? String((e as { code: string }).code) : ''
       if (code === 'auth/popup-closed-by-user') return
-      if (code === 'auth/domain') { const em = (e as { email?: string }).email; setError(em ? `${em} is not a @${ALLOWED_DOMAIN} email` : `Use your @${ALLOWED_DOMAIN} account`); return }
+      if (code === 'auth/domain') { setError('Google did not share your email — try again'); return }
       setError(`Sign-in failed${code ? ` (${code})` : ''}: ${errText(e, 'try again')}`)
     }
   }, [])
@@ -95,7 +95,7 @@ function useAppState() {
   // ---- profile ----
   const blankDraft = useMemo<Draft>(() => ({
     uid: user?.uid ?? '', username: normaliseUsername((user?.email ?? '').split('@')[0]).replace(/^[._]+/, ''), name: user?.displayName?.split(' ')[0] ?? '',
-    age: 0, intent: 'open', program: '', year: '2nd year', bio: '', status: '', interests: [], openTo: [], prompts: [],
+    age: 0, intent: 'open', program: '', year: '', bio: '', status: '', interests: [], openTo: [], prompts: [],
     photoURL: user?.photoURL ?? null, hue: 210, nature: null, area: null, activeAt: 0, visible: true,
     ...(partial ? Object.fromEntries(Object.entries(partial).filter(([k, v]) => v !== undefined && v !== null && v !== '' && !['loc', 'locAt', 'placeId', 'gender', 'seeking'].includes(k))) : {}),
   } as Draft), [user, partial])

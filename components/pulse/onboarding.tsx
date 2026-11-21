@@ -10,7 +10,6 @@ import { compressImage } from '@/lib/image'
 
 export type Draft = Omit<Person, 'vector' | 'archetype' | 'archetypeCode' | 'jung'> & { vector?: number[]; jung?: Jung }
 
-const YEARS = ['1st year', '2nd year', '3rd year', '4th year', '5th year', 'Masters', 'PhD']
 
 /** Profile builder (Instagram-style). `mode="edit"` skips the quiz. */
 export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onDone, onCancel, saving }: {
@@ -23,7 +22,7 @@ export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onD
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD(x => ({ ...x, [k]: v }))
   const steps = mode === 'onboard' ? 4 : 3
   const valid = [
-    nameOk && d.name.trim().length > 0 && d.age >= 18 && d.age <= 40 && d.program.trim().length > 0,
+    nameOk && d.name.trim().length > 0 && d.age >= 18 && d.age <= 99,
     d.interests.length >= 3,
     true,
   ]
@@ -46,11 +45,10 @@ export function ProfileBuilder({ initial, mode, locationOn, requestLocation, onD
         <UsernameField uid={d.uid} value={d.username} original={initial.username} onChange={(v, ok) => { set('username', v); setNameOk(ok) }} />
         <label className="field">Name<input value={d.name} maxLength={24} placeholder="First name" onChange={e => set('name', e.target.value)} /></label>
         <div className="field-row">
-          <label className="field small">Age<input type="number" inputMode="numeric" min={18} max={40} value={d.age || ''} onChange={e => set('age', Number(e.target.value))} /></label>
-          <label className="field">Program<input value={d.program} maxLength={32} placeholder="CSE, ECE, BBA…" onChange={e => set('program', e.target.value)} /></label>
+          <label className="field small">Age<input type="number" inputMode="numeric" min={18} max={99} value={d.age || ''} onChange={e => set('age', Number(e.target.value))} /></label>
+          <label className="field">Work or study <small>optional</small><input value={d.program} maxLength={40} placeholder="Designer at…, Student at…" onChange={e => set('program', e.target.value)} /></label>
         </div>
         {d.age > 0 && d.age < 18 && <p className="error">18+ only</p>}
-        <div className="field">Year<Segmented<string> value={d.year} onChange={v => set('year', v)} options={YEARS.map(y => ({ v: y, label: y.replace(' year', '') }))} /></div>
       </>}
 
       {step === 1 && <>

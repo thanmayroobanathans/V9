@@ -6,7 +6,7 @@ import { kv } from './kv'
  *
  * Kalman-smoothed positions are kept ONLY on this device (local storage, last 14 days). From them
  * we compute a handful of behaviour features. Only those features — plus a ~1.2 km area code
- * used for "usually around the same part of campus" — are shared. No coordinates leave the phone.
+ * used for "usually around the same area" — are shared. No coordinates leave the phone.
  *
  *   roam     how far you range (radius of gyration, log-scaled: ~100 m → 0, ~3 km → 1)
  *   variety  how many distinct ~150 m spots you visit per day
@@ -109,7 +109,7 @@ export function natureTags(n?: Nature | null): string[] {
 
 // ---------------------------------------------------------------------------
 // Area code: geohash with 6 characters ≈ 1.2 km × 0.6 km. Used only to tell whether two people
-// spend time in the same part of campus — never displayed.
+// spend time in the same area — never displayed.
 // ---------------------------------------------------------------------------
 const B32 = '0123456789bcdefghjkmnpqrstuvwxyz'
 export function areaCode(lat: number, lng: number, len = 6) {

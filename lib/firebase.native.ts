@@ -13,7 +13,7 @@ import { initializeFirestore, getFirestore, memoryLocalCache, type Firestore } f
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as WebBrowser from 'expo-web-browser'
 import * as Crypto from 'expo-crypto'
-import { emailOf, isAllowedEmail, ALLOWED_DOMAIN } from './config'
+import { emailOf, isAllowedEmail } from './config'
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDQQMTFQ8W0mj0jGdvdeVxIB8kgc419OaU',
@@ -58,7 +58,7 @@ export async function signInWithGoogle() {
   const cred = await signInWithCredential(auth, GoogleAuthProvider.credential(idToken, accessToken))
   if (!isAllowedEmail(emailOf(cred.user))) {
     await firebaseSignOut(auth)
-    throw Object.assign(new Error(`Use your @${ALLOWED_DOMAIN} account`), { code: 'auth/domain', email: emailOf(cred.user) })
+    throw Object.assign(new Error('Google did not share your email — try again'), { code: 'auth/domain', email: emailOf(cred.user) })
   }
   return cred
 }

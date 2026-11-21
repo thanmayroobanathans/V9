@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Flag, Grid3x3, Heart, ImagePlus, Lock, Plus, Search as SearchIcon, Settings, X } from 'lucide-react'
 import {
-  createPost, deletePost, likeInfo, report, searchPeople, setLike, watchPosts,
+  createPost, deletePost, likeInfo, report, searchPeople, setLike, watchPosts, workLine,
   type Follow, type Person, type Post,
 } from '@/lib/social'
 import { compressImage } from '@/lib/image'
@@ -57,7 +57,7 @@ export function ProfileScreen({ me, person, followState, followsMe, chatId, coun
       </div>
       <div className="ig-bio">
         <b>{person.name}</b>
-        <span className="ig-sub">{person.program} · {person.year}{quizTaken(person) ? ` · ${t.emoji} ${t.name}` : ''}</span>
+        <span className="ig-sub">{workLine(person)}{quizTaken(person) ? ` · ${t.emoji} ${t.name}` : ''}</span>
         {person.bio && <p>{person.bio}</p>}
         {person.interests?.length > 0 && <span className="ig-tags">{person.interests.map(i => <em key={i} className={!isMe && me.interests.includes(i) ? 'common' : ''}>#{i.toLowerCase().replace(/\s+/g, '')}</em>)}</span>}
       </div>
@@ -170,7 +170,7 @@ export function Search({ meUid, onOpen, suggestions = [], onFollow }: { meUid: s
       <label className="search-box"><SearchIcon size={18} /><input value={q} autoCapitalize="none" autoCorrect="off" placeholder="Search" onChange={e => setQ(e.target.value)} />{q && <button className="icon-button plain" onClick={() => setQ('')} aria-label="Clear"><X size={16} /></button>}</label>
       <div className="list">
         {loading && !res.length && Array.from({ length: 3 }, (_, i) => <div key={i} className="row"><span className="shimmer dot44" /><div><span className="shimmer line" /><span className="shimmer line short" /></div></div>)}
-        {res.map(p => <button key={p.uid} className="row" onClick={() => onOpen(p)}><Avatar name={p.name} photoURL={p.photoURL} hue={p.hue} size={44} /><div><b>{p.username}</b><span>{p.name} · {p.program}</span></div></button>)}
+        {res.map(p => <button key={p.uid} className="row" onClick={() => onOpen(p)}><Avatar name={p.name} photoURL={p.photoURL} hue={p.hue} size={44} /><div><b>{p.username}</b><span>{[p.name, p.program].filter(Boolean).join(' · ')}</span></div></button>)}
       </div>
       {!loading && q.trim().length >= 2 && !res.length && <p className="muted small center">No accounts found</p>}
       {q.trim().length < 2 && <>

@@ -42,12 +42,12 @@ export default function AuthBridge() {
   return (
     <main className="gate">
       <div className="gate-inner page-in">
-        <div className="logo big">VIT Pulse</div>
+        <div className="logo big">Pulse</div>
         {link
-          ? <><p className="muted center">Signed in. Returning to the app…</p><a className="primary-button wide" href={link}>Open VIT Pulse</a></>
+          ? <><p className="muted center">Signed in. Returning to the app…</p><a className="primary-button wide" href={link}>Open Pulse</a></>
           : <><p className="muted center">Sign in to continue in the app.</p>
             <button className="primary-button wide" disabled={busy || !state} onClick={go}>{busy ? 'Signing in…' : 'Continue with Google'}</button></>}
-        {!state && <p className="error center">Open this page from the VIT Pulse app.</p>}
+        {!state && <p className="error center">Open this page from the Pulse app.</p>}
         {error && <p className="error center">{error}</p>}
       </div>
     </main>

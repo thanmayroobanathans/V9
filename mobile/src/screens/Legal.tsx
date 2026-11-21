@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import { ScrollView, Text, View } from 'react-native'
+import { ScrollView, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Header, Segmented, T } from '../components/ui'
+import { Header, Segmented, T, Text } from '../components/ui'
 import { PRIVACY, TERMS, UPDATED, type Section } from '../legal'
 import { C } from '../theme'
 

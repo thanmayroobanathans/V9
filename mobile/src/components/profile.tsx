@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Dimensions, Pressable, StyleSheet, View } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
-import { watchPosts, type Person, type Post } from '../../../lib/social'
+import { watchPosts, workLine, type Person, type Post } from '../../../lib/social'
 import { typeInfo, AXES, type Jung } from '../../../lib/jung'
 import { jungOf, quizTaken } from '../../../lib/match'
 import { natureTags } from '../../../lib/nature'
-import { Avatar, Button, Empty, T } from './ui'
+import { Avatar, Button, Empty, T, Text } from './ui'
 import { C } from '../theme'
 
 const TILE = (Math.min(Dimensions.get('window').width, 600) - 4) / 3
@@ -33,7 +33,7 @@ export function ProfileView({ me, person, counts, actions, canSee, onOpenPost, o
       </View>
       <View style={{ paddingHorizontal: 16, gap: 2 }}>
         <Text style={T.b}>{person.name}</Text>
-        <Text style={T.muted}>{person.program} · {person.year}{quizTaken(person) ? ` · ${t.emoji} ${t.name}` : ''}{tags.length ? ` · ${tags[0]}` : ''}</Text>
+        <Text style={T.muted}>{workLine(person)}{quizTaken(person) ? ` · ${t.emoji} ${t.name}` : ''}{tags.length ? ` · ${tags[0]}` : ''}</Text>
         {!!person.bio && <Text style={[T.body, { marginTop: 4 }]}>{person.bio}</Text>}
         {person.interests?.length > 0 && <Text style={{ marginTop: 4, flexWrap: 'wrap' }}>{person.interests.map(i => <Text key={i} style={{ color: !isMe && me.interests.includes(i) ? C.accent : '#e0f1ff', fontWeight: !isMe && me.interests.includes(i) ? '600' : '400' }}>#{i.toLowerCase().replace(/\s+/g, '')}  </Text>)}</Text>}
       </View>
@@ -66,7 +66,7 @@ export function TypeCard({ jung }: { jung: Jung }) {
   return (
     <View style={s.type}>
       <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-        <View style={{ width: 60, height: 60, borderRadius: 16, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 34 }}>{t.emoji}</Text></View>
+        <View style={{ width: 60, height: 60, borderRadius: 16, backgroundColor: C.panel2, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 34 }}>{t.emoji}</Text></View>
         <View><Text style={[T.muted, { fontSize: 11, letterSpacing: 1.5 }]}>YOUR TYPE</Text><Text style={{ color: C.ink, fontSize: 24, fontWeight: '700' }}>{t.name}</Text></View>
       </View>
       <Text style={[T.body, { marginVertical: 12 }]}>{t.blurb}</Text>
@@ -87,7 +87,7 @@ export function TypeCard({ jung }: { jung: Jung }) {
 export function ActionButton(props: React.ComponentProps<typeof Button>) { return <Button small {...props} style={[{ flex: 1 }, props.style]} /> }
 
 const s = StyleSheet.create({
-  tile: { width: TILE, height: TILE, backgroundColor: '#121212', overflow: 'hidden' },
+  tile: { width: TILE, height: TILE, backgroundColor: C.panel, overflow: 'hidden' },
   textTile: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 10, backgroundColor: '#222' },
   nudge: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginTop: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.panel },
   type: { backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 18, padding: 18, marginVertical: 8 },
