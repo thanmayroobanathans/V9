@@ -1,6 +1,6 @@
 name: Build Android APK
 
-# Builds the native VIT Pulse app (mobile/, React Native + Expo) and publishes the APK as a
+# Builds the native Pulse app (mobile/, React Native + Expo) and publishes the APK as a
 # GitHub release. Same package name and signing key as earlier builds, so it installs as an update.
 
 on:
@@ -79,20 +79,20 @@ jobs:
           printf '\norg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g\nreactNativeArchitectures=armeabi-v7a,arm64-v8a\n' >> gradle.properties
           tail -4 gradle.properties
           ./gradlew --no-daemon assembleRelease
-          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/VIT-Pulse.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/Pulse.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: VIT-Pulse-apk
-          path: VIT-Pulse.apk
+          name: Pulse-apk
+          path: Pulse.apk
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-native-v${{ github.run_number }}
-          name: VIT Pulse for Android — native (build ${{ github.run_number }})
+          name: Pulse for Android — native (build ${{ github.run_number }})
           body: |
-            Download **VIT-Pulse.apk** below and open it on your Android phone to install.
+            Download **Pulse.apk** below and open it on your Android phone to install.
             If Android asks, allow installing apps from your browser.
-          files: VIT-Pulse.apk
+          files: Pulse.apk
           make_latest: true
