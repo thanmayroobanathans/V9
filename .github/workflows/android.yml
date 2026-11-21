@@ -75,8 +75,9 @@ jobs:
       - name: Build APK
         working-directory: mobile/android
         run: |
-          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> gradle.properties
-          echo "reactNativeArchitectures=armeabi-v7a,arm64-v8a" >> gradle.properties
+          # gradle.properties may not end with a newline; start ours on a fresh line.
+          printf '\norg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g\nreactNativeArchitectures=armeabi-v7a,arm64-v8a\n' >> gradle.properties
+          tail -4 gradle.properties
           ./gradlew --no-daemon assembleRelease
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/VIT-Pulse.apk"
 
